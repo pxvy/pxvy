@@ -1,0 +1,14 @@
+python -m nuitka smi_to_srt.py ^
+  --onefile ^
+  --lto=yes ^
+  --follow-imports ^
+  --remove-output ^
+  --assume-yes-for-downloads ^
+  --enable-plugin=upx ^
+  --plugin-enable=anti-bloat ^
+  --noinclude-pytest-mode=nofollow ^
+  --noinclude-setuptools-mode=nofollow ^
+  --noinclude-unittest-mode=nofollow ^
+  --noinclude-IPython-mode=nofollow ^
+  --noinclude-dask-mode=nofollow ^
+  --windows-icon-from-ico=python.ico

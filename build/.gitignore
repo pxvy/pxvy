@@ -1,0 +1,9 @@
+build_mpv/
+ffmpeg_lgpl/
+LGPL/
+msys64/
+output_mpv/
+TEMP/
+build_mediainfo_work/
+build_libmpv*.bat
+dlls.txt
