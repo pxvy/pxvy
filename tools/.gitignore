@@ -5,3 +5,5 @@ sqlite-amalgamation-3510200.zip
 winuser.txt
 wm_to_map.py
 sqlite-amalgamation-3510200/
+fonts/
+*.ttc

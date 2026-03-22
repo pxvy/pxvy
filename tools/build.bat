@@ -12,3 +12,7 @@ python -m nuitka smi_to_srt.py ^
   --noinclude-IPython-mode=nofollow ^
   --noinclude-dask-mode=nofollow ^
   --windows-icon-from-ico=python.ico
+
+
+:: smi_to_srt.py를 ../cmake-build-debug/ 에 복사
+:: smi_to_srt.py를 ../cmake-build-release/ 에 복사

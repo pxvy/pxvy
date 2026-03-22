@@ -5,6 +5,8 @@
 #include <windows.h>
 #include <math.h>
 #include <stdlib.h>
+#include "custom_msgbox.h"
+#include "font_picker.h"
 #include "about.h"
 #include "database.h"
 // ──────────────────── 메뉴 커맨드 ID ────────────────────
@@ -100,6 +102,11 @@ static void apply_theme(HWND hWnd, UINT id) {
         // About 창 테마 갱신
         if (g_about_hwnd && IsWindow(g_about_hwnd)) {
             ab_draw_layered();
+        }
+        if (g_fp_hwnd!=NULL) {
+            DwmSetWindowAttribute(g_fp_hwnd, 34, &border, sizeof(border));
+            InvalidateRect(g_fp_hwnd, NULL, FALSE);
+            UpdateWindow(g_fp_hwnd);
         }
 
         InvalidateRect(hWnd, NULL, FALSE);

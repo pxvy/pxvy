@@ -77,22 +77,25 @@ swscale-9.dl
 ## 탐색기
 
 ```
-powershell [guid]::NewGuid()
+powershell [guid]::NewGuid().Guid
 ```
 
 
 
-# TODO	
+# TODO
 
 - [x] Mediainfo TAB키로 ON/OFF
 - [ ] PlayList가 IINA에 있나?
   - [ ] 있다면 PlayList만들기
 - [ ] 탐색기 썸네일
 - [ ] 설정 창
-  - [ ] 자막 폰트 변경
-  - [ ] 
-
-- [ ] 잘못된 파일이 열리면 경고메시지 표시
+  - [x] 자막 폰트 변경 (볼드체는 폰트 리스트에서 선택가능)
+  - [ ] 최근 재생 목록 사용/ 미사용
+    - [ ] 최근 재생 목록 개수
+  - [ ] 재생 속도 조절 시간 정하기
+    - [ ] 1초 ~ 10초 사이
+  
+- [x] 잘못된 파일이 열리면 경고메시지 표시
 - [ ] PIP 모드
 - [ ] About 창
   - [ ] 라이선스 표시 (GPL 사용하자 공짜로 배포하고)
@@ -100,7 +103,6 @@ powershell [guid]::NewGuid()
 - [x] 최근 재생 목록
   - [x] 10개로 제한
   - [x] (Clear) 추가
-
 
 
 
@@ -123,7 +125,10 @@ powershell [guid]::NewGuid()
 * Ctrl + WHEEL: 시스템 볼륨 조정
 * Ctrl + Q: 프로그램 종료
 * Ctrl + O: 파일 열기
+* Ctrl + F: 폰트 선택
 * H: 캡션바, 컨트롤뷰, 커서 숨기기
-* 
+  * 구현 예정
+  * 
+
 
  

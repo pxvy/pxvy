@@ -49,12 +49,12 @@ static int pxvy_db_init(void) {
             ");"
             "INSERT OR IGNORE INTO ColorTable(id, R, G, B) VALUES(1, 52, 199, 89);"
 
-            /* 2. FontTable */
-            "CREATE TABLE IF NOT EXISTS FontTable ("
+            /* 2. SubtitleFont */
+            "CREATE TABLE IF NOT EXISTS SubtitleFont ("
             "  id       INTEGER PRIMARY KEY CHECK(id = 1),"
             "  FontName TEXT NOT NULL"
             ");"
-            "INSERT OR IGNORE INTO FontTable(id, FontName) VALUES(1, 'Segoe UI');"
+            "INSERT OR IGNORE INTO SubtitleFont(id, FontName) VALUES(1, 'Segoe UI');"
 
             /* 3. CapturePath */
             "CREATE TABLE IF NOT EXISTS CapturePath ("
@@ -95,6 +95,7 @@ static int pxvy_db_init(void) {
     sqlite3_close(db);
     return 0;
 }
+
 static int pxvy_clear_recent_video(void) {
     sqlite3 *db;
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
@@ -102,6 +103,7 @@ static int pxvy_clear_recent_video(void) {
     sqlite3_close(db);
     return 0;
 }
+
 static int pxvy_add_recent_video(const char *file_path) {
     sqlite3 *db;
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
@@ -126,8 +128,8 @@ static int pxvy_add_recent_video(const char *file_path) {
 
     /* 10개 초과분(오래된 것) 제거 */
     const char *trim_sql =
-        "DELETE FROM RecentVideos WHERE idx NOT IN"
-        "  (SELECT idx FROM RecentVideos ORDER BY idx DESC LIMIT 10);";
+            "DELETE FROM RecentVideos WHERE idx NOT IN"
+            "  (SELECT idx FROM RecentVideos ORDER BY idx DESC LIMIT 10);";
     sqlite3_exec(db, trim_sql, NULL, NULL, NULL);
 
     sqlite3_close(db);
@@ -135,7 +137,7 @@ static int pxvy_add_recent_video(const char *file_path) {
 }
 
 char g_recent_video[10][MAX_PATH + 3];
-int  g_recent_count = 0;
+int g_recent_count = 0;
 
 static int pxvy_get_recent_video(void) {
     g_recent_count = 0;
@@ -145,12 +147,12 @@ static int pxvy_get_recent_video(void) {
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
 
     const char *sql =
-        "SELECT FilePath FROM RecentVideos ORDER BY idx DESC LIMIT 10;";
+            "SELECT FilePath FROM RecentVideos ORDER BY idx DESC LIMIT 10;";
     sqlite3_stmt *stmt;
     int rc = -1;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW && g_recent_count < 10) {
-            const char *path = (const char *)sqlite3_column_text(stmt, 0);
+            const char *path = (const char *) sqlite3_column_text(stmt, 0);
             if (path) {
                 strncpy(g_recent_video[g_recent_count], path, MAX_PATH + 2);
                 g_recent_video[g_recent_count][MAX_PATH + 2] = '\0';
@@ -165,17 +167,64 @@ static int pxvy_get_recent_video(void) {
     return rc;
 }
 
+static int pxvy_remove_recent_video(const char *file_path) {
+    sqlite3 *db;
+    if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
+    sqlite3_stmt *stmt;
+    const char *sql = "DELETE FROM RecentVideos WHERE FilePath = ?;";
+    int rc = -1;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, file_path, -1, SQLITE_STATIC);
+        rc = (sqlite3_step(stmt) == SQLITE_DONE) ? 0 : -1;
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return rc;
+}
+
 // ────────────────────────────────────────────
 //  FontName 가져오기
 //  buf: 호출자가 준비한 버퍼, buf_size: 크기
 //  반환값: 0 성공, -1 실패
 // ────────────────────────────────────────────
-static int pxvy_get_font_name(char *buf, int buf_size) {
+// ────────────────────────────────────────────
+//  SubtitleFont 저장
+//  반환값: 0 성공, -1 실패
+// ────────────────────────────────────────────
+static int pxvy_set_subtitle_font(const char *font_name) {
+    sqlite3 *db;
+    if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
+
+    const char *sql =
+            "INSERT INTO SubtitleFont(id, FontName) VALUES(1, ?)"
+            " ON CONFLICT(id) DO UPDATE SET FontName = excluded.FontName;";
+
+    sqlite3_stmt *stmt;
+    int rc = -1;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, font_name, -1, SQLITE_STATIC);
+        rc = (sqlite3_step(stmt) == SQLITE_DONE) ? 0 : -1;
+        sqlite3_finalize(stmt);
+    }
+
+    sqlite3_close(db);
+    return rc;
+}
+
+// ────────────────────────────────────────────
+//  SubtitleFont 로드
+//  buf: 호출자가 준비한 버퍼, buf_size: 크기
+//  반환값: 0 성공, -1 실패 (buf 는 빈 문자열로 초기화)
+// ────────────────────────────────────────────
+static int pxvy_get_subtitle_font(char *buf, int buf_size) {
+    if (!buf || buf_size <= 0) return -1;
+    buf[0] = '\0';
+
     sqlite3 *db;
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
 
     sqlite3_stmt *stmt;
-    const char *sql = "SELECT FontName FROM FontTable WHERE id = 1;";
+    const char *sql = "SELECT FontName FROM SubtitleFont WHERE id = 1;";
     int rc = -1;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
@@ -192,10 +241,6 @@ static int pxvy_get_font_name(char *buf, int buf_size) {
     return rc;
 }
 
-// ────────────────────────────────────────────
-//  RGB 색상 가져오기
-//  반환값: 0 성공, -1 실패
-// ────────────────────────────────────────────
 static Color3 pxvy_get_color() {
     sqlite3 *db;
     Color3 c = {52, 199, 89};
@@ -248,9 +293,5 @@ static int pxvy_set_color(int r, int g, int b) {
     return rc;
 }
 
-// ────────────────────────────────────────────
-//  최근 재생 영상 추가
-//  중복 경로면 PlayedAt만 갱신 (UPSERT)
-// ────────────────────────────────────────────
 
 #endif //PXVY_DATABASE_H

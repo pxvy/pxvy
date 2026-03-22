@@ -43,26 +43,27 @@
 #define ABOUT_SYM_SZ    20      // symbol.png 렌더/리사이즈 크기    
 #define ABOUT_LOGO_SZ   72      // logo.png 최대 크기               
 #define ABOUT_ROUND     10      // = MENU_ROUND (context_menu.h)    
-#define ABOUT_FONT_H    20      // = g_font_height (main.c)         
+#define ABOUT_FONT_H    20      // = g_font_height (main.c)
+#define ABOUT_ALPHA    210      // 창 전체 불투명도 (0=완전투명 ~ 255=불투명)
 #define ABOUT_TITLE "ABOUT"
 
 #define APP_NAME_MARGIN 20.f
 #define APP_INFO_MARGIN 20.f
 
-// ─── 전역 핸들 ─────────────────────────────────────────────────── 
-static HWND g_about_hwnd = NULL; // 표시창 (WS_EX_LAYERED)     
-static HWND g_about_gl_hwnd = NULL; // 숨겨진 GL 렌더 전용 창     
+// ─── 전역 핸들 ───────────────────────────────────────────────────
+static HWND g_about_hwnd = NULL; // 표시창 (WS_EX_LAYERED)
+static HWND g_about_gl_hwnd = NULL; // 숨겨진 GL 렌더 전용 창
 
-// ─── About 전용 폰트 (독립, wglShareLists 불필요) ──────────────── 
+// ─── About 전용 폰트 (독립, wglShareLists 불필요) ────────────────
 static GLuint g_ab_font = 0;
 static GLYPHMETRICSFLOAT g_ab_glyph[128];
 
-// ─── 컨텍스트 ──────────────────────────────────────────────────── 
+// ─── 컨텍스트 ────────────────────────────────────────────────────
 typedef struct {
     HDC gl_dc;
     HGLRC gl_rc;
-    GLuint sym_tex; // symbol.png 20×20 
-    GLuint logo_tex; // logo.png, 최대 ABOUT_LOGO_SZ 
+    GLuint sym_tex; // symbol.png 20×20
+    GLuint logo_tex; // logo.png, 최대 ABOUT_LOGO_SZ
     int logo_w, logo_h;
     BOOL close_hover;
 } AboutCtx;
@@ -76,7 +77,7 @@ static void ab_ortho(int w, int h) {
     glLoadIdentity();
 }
 
-// 폰트 초기화 (main.c init_font 동일 파라미터) 
+// 폰트 초기화 (main.c init_font 동일 파라미터)
 static void ab_init_font(HDC hdc) {
     if (g_ab_font) return;
     g_ab_font = glGenLists(128);
@@ -91,7 +92,7 @@ static void ab_init_font(HDC hdc) {
     DeleteObject(hf);
 }
 
-// scale 배 폰트로 문자열 렌더 (main.c gl_draw_string 동일) 
+// scale 배 폰트로 문자열 렌더 (main.c gl_draw_string 동일)
 static void ab_str(float x, float y, const char *s, float scale) {
     float sz = ABOUT_FONT_H * scale;
     glPushMatrix();
@@ -104,7 +105,7 @@ static void ab_str(float x, float y, const char *s, float scale) {
     glPopMatrix();
 }
 
-// 문자열 너비 (main.c gl_measure_string 동일) 
+// 문자열 너비 (main.c gl_measure_string 동일)
 static float ab_w(const char *s, float scale) {
     float sz = ABOUT_FONT_H * scale, w = 0.0f;
     for (const char *p = s; *p; p++) {
@@ -115,7 +116,7 @@ static float ab_w(const char *s, float scale) {
 }
 
 // stbi + stbir 로 GL 텍스처 생성, 지정 크기로 리사이즈
-// target_w/h = -1 이면 원본 크기 사용                                
+// target_w/h = -1 이면 원본 크기 사용
 static GLuint ab_load_tex(const char *path,
                           int target_w, int target_h,
                           int *out_w, int *out_h) {
@@ -159,7 +160,7 @@ static GLuint ab_load_tex(const char *path,
     return t;
 }
 
-// 텍스처 쿼드 렌더 
+// 텍스처 쿼드 렌더
 static void ab_quad_tex(GLuint tex, float x, float y, float w, float h) {
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -184,7 +185,7 @@ static void ab_render_gl(AboutCtx *ctx) {
     float lx = 15.0f;
     glViewport(0, 0, ABOUT_W, ABOUT_H);
 
-    // clear – 배경색 
+    // clear – 배경색
     glClearColor(os_theme.background.r / 255.0f,
                  os_theme.background.g / 255.0f,
                  os_theme.background.b / 255.0f, 1.0f);
@@ -198,7 +199,7 @@ static void ab_render_gl(AboutCtx *ctx) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // ── 1. 전체 배경 ── 
+    // ── 1. 전체 배경 ──
     glColor4f_255(OS_THEME_BK, 1.0f);
     glBegin(GL_QUADS);
     glVertex2f(0, 0);
@@ -207,8 +208,8 @@ static void ab_render_gl(AboutCtx *ctx) {
     glVertex2f(0, H);
     glEnd();
 
-    // ── 2. 캡션 바 ── 
-    glColor4f_255(OS_THEME_BK, 1.0f); // OS_THEME_PC → OS_THEME_BK 
+    // ── 2. 캡션 바 ──
+    glColor4f_255(OS_THEME_BK, 1.0f); // OS_THEME_PC → OS_THEME_BK
     glBegin(GL_QUADS);
     glVertex2f(0, 0);
     glVertex2f(W, 0);
@@ -226,24 +227,24 @@ static void ab_render_gl(AboutCtx *ctx) {
 
     // ── 4. 캡션 "About" ──
     // 캡션이 primary color이므로 텍스트는 흰색 고정
-    // main.c 스타일: 그림자(어두운색) + 본문(흰색)                    
+    // main.c 스타일: 그림자(어두운색) + 본문(흰색)
     {
         float tx = 15.0f + (float) ABOUT_SYM_SZ + 6.0f;
         float ty = capH * 0.70f;
 
         glEnable(GL_POLYGON_SMOOTH);
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-        // 그림자 (반투명 검정) 
+        // 그림자 (반투명 검정)
         glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
         ab_str(tx + 1.0f, ty + 1.0f, ABOUT_TITLE, 1.0f);
-        // 본문 (흰색) 
+        // 본문 (흰색)
         glColor4f(1.0f, 1.0f, 1.0f, 0.95f);
         ab_str(tx, ty, ABOUT_TITLE, 1.0f);
         glDisable(GL_POLYGON_SMOOTH);
     }
 
     // ── 5. 닫기 버튼 (main.c gl_draw_caption 완전 동일) ──
-    //  hover → primary color 배경, X → OS_THEME_FG, lineWidth 1.5f     
+    //  hover → primary color 배경, X → OS_THEME_FG, lineWidth 1.5f
     {
         float bW = (float) ABOUT_BTN_W, bH = capH;
         float re = W, cL = re - bW;
@@ -260,7 +261,7 @@ static void ab_render_gl(AboutCtx *ctx) {
             glVertex2f(cL, bH);
             glEnd();
         }
-        // X – 흰색 (캡션이 primary color 이므로) 
+        // X – 흰색 (캡션이 primary color 이므로)
         glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
         glLineWidth(1.5f);
         glBegin(GL_LINES);
@@ -272,7 +273,7 @@ static void ab_render_gl(AboutCtx *ctx) {
         glLineWidth(1.0f);
     }
 
-    // ── 6. logo.png (중앙, 비율 유지 최대 ABOUT_LOGO_SZ) ── 
+    // ── 6. logo.png (중앙, 비율 유지 최대 ABOUT_LOGO_SZ) ──
     float logo_y = capH + 16.0f;
     float logo_dw = (float) (ctx->logo_w > 0 ? ctx->logo_w : ABOUT_LOGO_SZ);
     float logo_dh = (float) (ctx->logo_h > 0 ? ctx->logo_h : ABOUT_LOGO_SZ);
@@ -281,7 +282,7 @@ static void ab_render_gl(AboutCtx *ctx) {
         ab_quad_tex(ctx->logo_tex, lx, logo_y, logo_dw, logo_dh);
     }
 
-    // ── 7. "PXVY" 제목 (scale=1.6, 중앙, 그림자+본문) ── 
+    // ── 7. "PXVY" 제목 (scale=1.6, 중앙, 그림자+본문) ──
     const float TS = 1.6f;
     float title_y = logo_y + logo_dh + 8.0f + APP_NAME_MARGIN;
     {
@@ -289,16 +290,16 @@ static void ab_render_gl(AboutCtx *ctx) {
         float tx = (W - tw) * 0.5f;
         glEnable(GL_POLYGON_SMOOTH);
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-        // 그림자 
+        // 그림자
         glColor4f_255(OS_THEME_BK, 0.5f);
         ab_str(tx + 1.0f, title_y + 1.0f, "PXVY", TS);
-        // 본문 
+        // 본문
         glColor4f_255(OS_THEME_FG, 0.9f);
         ab_str(tx, title_y, "PXVY", TS);
         glDisable(GL_POLYGON_SMOOTH);
     }
 
-    // ── 8. 구분선 (primary color) ── 
+    // ── 8. 구분선 (primary color) ──
     float sep_y = title_y + (float) ABOUT_FONT_H * TS + 10.0f;
     glColor4f_255(OS_THEME_PC, 0.8f);
     glLineWidth(1.0f);
@@ -309,12 +310,12 @@ static void ab_render_gl(AboutCtx *ctx) {
 
     // ── 9. 정보 행 (Scissor 없이 단순 렌더) ──
     //  라벨: primary color / 값: foreground
-    // Compiler 같이 긴 값은 창 끝에서 자연스럽게 잘림               
+    // Compiler 같이 긴 값은 창 끝에서 자연스럽게 잘림
     {
         const float S = 0.75f;
         const float RH = (float) ABOUT_FONT_H * S + 8.0f;
-        const float LX = 20.0f; // 라벨 x 
-        const float VX = 120.0f; // 값    x 
+        const float LX = 20.0f; // 라벨 x
+        const float VX = 120.0f; // 값    x
 
         const char *lbl[] = {"Version", "Compiler", "Build Time"};
         const char *val[] = {VERSION, BUILD_ENV_STRING, BUILD_TIME_KST};
@@ -325,13 +326,13 @@ static void ab_render_gl(AboutCtx *ctx) {
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
 
         for (int i = 0; i < 3; i++) {
-            // 라벨 
+            // 라벨
             glColor4f_255(OS_THEME_PC, 1.0f);
             ab_str(LX, ry, lbl[i], S);
-            // 값 – 우측 클리핑 (Y-down ortho → scissor Y 변환) 
+            // 값 – 우측 클리핑 (Y-down ortho → scissor Y 변환)
             float text_top = ry - (float) ABOUT_FONT_H * S;
             float text_bottom = ry + 4.0f;
-            float sci_y = (float) ABOUT_H - text_bottom; // GL bottom-up 
+            float sci_y = (float) ABOUT_H - text_bottom; // GL bottom-up
             float sci_h = text_bottom - text_top + 2.0f;
             glEnable(GL_SCISSOR_TEST);
             glScissor((GLint) VX, (GLint) sci_y,
@@ -358,11 +359,11 @@ static void ab_draw_layered(void) {
 
     const int W = ABOUT_W, H = ABOUT_H;
 
-    // ── 1. GL 렌더 ── 
+    // ── 1. GL 렌더 ──
     wglMakeCurrent(ctx->gl_dc, ctx->gl_rc);
     ab_render_gl(ctx);
 
-    // ── 2. glReadPixels (bottom-up BGRA) ── 
+    // ── 2. glReadPixels (bottom-up BGRA) ──
     DWORD *gl_pix = (DWORD *) malloc((size_t) W * H * 4);
     if (!gl_pix) {
         wglMakeCurrent(NULL, NULL);
@@ -371,7 +372,7 @@ static void ab_draw_layered(void) {
     glReadPixels(0, 0, W, H, GL_BGRA_EXT, GL_UNSIGNED_BYTE, gl_pix);
     wglMakeCurrent(NULL, NULL);
 
-    // ── 3. DIB 생성 (top-down) ── 
+    // ── 3. DIB 생성 (top-down) ──
     HDC scr_dc = GetDC(NULL);
     HDC mem_dc = CreateCompatibleDC(scr_dc);
     BITMAPINFO bi = {0};
@@ -386,7 +387,7 @@ static void ab_draw_layered(void) {
                                    (void **) &bits, NULL, 0);
     HBITMAP oldbm = (HBITMAP) SelectObject(mem_dc, dib);
 
-    // ── 4. Y-flip ── 
+    // ── 4. Y-flip ──
     for (int y = 0; y < H; y++)
         memcpy_s(bits + y * W,
                  (size_t) W * 4,
@@ -394,7 +395,7 @@ static void ab_draw_layered(void) {
                  (size_t) W * 4);
     free(gl_pix);
 
-    // ── 5. GDI RoundRect 테두리 (premult 전에 먼저 그림) ── 
+    // ── 5. GDI RoundRect 테두리 (premult 전에 먼저 그림) ──
     {
         COLORREF bc = RGB(g_primary_color.r, g_primary_color.g, g_primary_color.b);
         HPEN pen = CreatePen(PS_SOLID, 1, bc);
@@ -407,62 +408,48 @@ static void ab_draw_layered(void) {
         DeleteObject(pen);
     }
 
-    // ── 6. Premultiplied alpha ── 
-    const BYTE A = 255;
+    // ── 6. Premultiplied alpha ──
+    const BYTE A = ABOUT_ALPHA;
     for (int i = 0; i < W * H; i++) {
         DWORD c = bits[i];
         BYTE r = (c >> 16) & 0xFF;
-        BYTE g = (c >> 8) & 0xFF;
-        BYTE b = c & 0xFF;
-        bits[i] = ((DWORD) A << 24)
-                  | ((DWORD) (r * A / 255) << 16)
-                  | ((DWORD) (g * A / 255) << 8)
-                  | ((DWORD) (b * A / 255));
+        BYTE g = (c >>  8) & 0xFF;
+        BYTE b =  c        & 0xFF;
+        bits[i] = ((DWORD) A            << 24)
+                | ((DWORD)(r * A / 255) << 16)
+                | ((DWORD)(g * A / 255) <<  8)
+                | ((DWORD)(b * A / 255));
     }
 
-    // ── 7. AA 모서리 ── 
+    // ── 7. AA 모서리 ──
     float fr = (float) ABOUT_ROUND;
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
             float fx = x + 0.5f, fy = y + 0.5f;
             float ccx = fr, ccy = fr;
             BOOL in = FALSE;
-            if (fx < fr && fy < fr) {
-                ccx = fr;
-                ccy = fr;
-                in = TRUE;
-            } else if (fx > W - fr && fy < fr) {
-                ccx = W - fr;
-                ccy = fr;
-                in = TRUE;
-            } else if (fx < fr && fy > H - fr) {
-                ccx = fr;
-                ccy = H - fr;
-                in = TRUE;
-            } else if (fx > W - fr && fy > H - fr) {
-                ccx = W - fr;
-                ccy = H - fr;
-                in = TRUE;
-            }
+            if      (fx < fr     && fy < fr    ) { ccx = fr;     ccy = fr;     in = TRUE; }
+            else if (fx > W - fr && fy < fr    ) { ccx = W - fr; ccy = fr;     in = TRUE; }
+            else if (fx < fr     && fy > H - fr) { ccx = fr;     ccy = H - fr; in = TRUE; }
+            else if (fx > W - fr && fy > H - fr) { ccx = W - fr; ccy = H - fr; in = TRUE; }
             if (!in) continue;
             float dx = fx - ccx, dy = fy - ccy;
             float edge = sqrtf(dx * dx + dy * dy) - fr;
             if (edge >= 0.5f) {
                 bits[y * W + x] = 0;
             } else if (edge > -0.5f) {
-                float t = 0.5f - edge;
+                float t = (0.5f - edge) * (ABOUT_ALPHA / 255.0f);
                 DWORD c = bits[y * W + x];
                 bits[y * W + x] =
-                        ((DWORD) ((BYTE) (((c >> 24) & 0xFF) * t + 0.5f)) << 24) |
-                        ((DWORD) ((BYTE) (((c >> 16) & 0xFF) * t + 0.5f)) << 16) |
-                        ((DWORD) ((BYTE) (((c >> 8) & 0xFF) * t + 0.5f)) << 8) |
-                        ((DWORD) ((BYTE) ((c & 0xFF) * t + 0.5f)));
+                    ((DWORD)((BYTE)(((c >> 24) & 0xFF) * t + 0.5f)) << 24) |
+                    ((DWORD)((BYTE)(((c >> 16) & 0xFF) * t + 0.5f)) << 16) |
+                    ((DWORD)((BYTE)(((c >>  8) & 0xFF) * t + 0.5f)) <<  8) |
+                    ((DWORD)((BYTE)(( c        & 0xFF) * t + 0.5f)));
             }
         }
     }
 
-
-    // ── 8. UpdateLayeredWindow ── 
+    // ── 8. UpdateLayeredWindow ──
     POINT ptSrc = {0, 0};
     SIZE sz = {W, H};
     RECT wr;
@@ -599,13 +586,13 @@ static LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg,
 static void ab_register(HINSTANCE hi) {
     static BOOL done = FALSE;
     if (done) return;
-    // GL 전용 (숨김) 
+    // GL 전용 (숨김)
     WNDCLASSA a = {0};
     a.lpfnWndProc = DefWindowProcA;
     a.hInstance = hi;
     a.lpszClassName = "PXVYAboutGL";
     RegisterClassA(&a);
-    // 표시 (Layered) 
+    // 표시 (Layered)
     WNDCLASSW w = {0};
     w.lpfnWndProc = AboutWndProc;
     w.hInstance = hi;
@@ -628,7 +615,7 @@ static void show_about_window(HWND owner) {
     AboutCtx *ctx = (AboutCtx *) calloc(1, sizeof(AboutCtx));
     if (!ctx) return;
 
-    // ── 숨겨진 GL 창 ── 
+    // ── 숨겨진 GL 창 ──
     g_about_gl_hwnd = CreateWindowA("PXVYAboutGL", NULL, WS_POPUP,
                                     -ABOUT_W*2, 0, ABOUT_W, ABOUT_H,
                                     NULL, NULL, hi, NULL);
@@ -650,7 +637,7 @@ static void show_about_window(HWND owner) {
     SetPixelFormat(ctx->gl_dc, pf, &pfd);
     ctx->gl_rc = wglCreateContext(ctx->gl_dc);
 
-    // ── 폰트 + 텍스처 (GL 컨텍스트 내에서) ── 
+    // ── 폰트 + 텍스처 (GL 컨텍스트 내에서) ──
     wglMakeCurrent(ctx->gl_dc, ctx->gl_rc);
     ab_init_font(ctx->gl_dc);
 
@@ -661,13 +648,13 @@ static void show_about_window(HWND owner) {
     snprintf(sym, MAX_PATH, "%ssymbol.png", exe);
     snprintf(logo, MAX_PATH, "%slogo.png", exe);
 
-    // symbol: main.c 와 동일하게 20×20 으로 리사이즈 
+    // symbol: main.c 와 동일하게 20×20 으로 리사이즈
     ctx->sym_tex = ab_load_tex(sym, ABOUT_SYM_SZ, ABOUT_SYM_SZ, NULL, NULL);
 
-    // logo: 비율 유지 최대 ABOUT_LOGO_SZ 
+    // logo: 비율 유지 최대 ABOUT_LOGO_SZ
     {
         int ow, oh;
-        ab_load_tex(logo, -1, -1, &ow, &oh); // 원본 크기 측정 
+        ab_load_tex(logo, -1, -1, &ow, &oh); // 원본 크기 측정
         if (ow > 0 && oh > 0) {
             float sc = (float) ABOUT_LOGO_SZ /
                        (float) (ow > oh ? ow : oh);
@@ -679,7 +666,7 @@ static void show_about_window(HWND owner) {
 
     wglMakeCurrent(NULL, NULL);
 
-    // ── WS_EX_LAYERED 표시 창 ── 
+    // ── WS_EX_LAYERED 표시 창 ──
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
     g_about_hwnd = CreateWindowExW(

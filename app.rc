@@ -1,7 +1,8 @@
 #include "resource.h"
-IDI_MAIN_ICON ICON "logo.ico"
+IDI_MAIN_ICON               ICON    "logo.ico"
 
-IDR_FONT_NOTOSANS   RT_FONT "NotoSansKR-Regular.otf"
-IDR_FONT_POPPINS    RT_FONT "Poppins-Regular.ttf"
-IDR_FONT_ROBOTO     RT_FONT "Roboto-Regular.ttf"
-IDR_FONT_D2CODING   RT_FONT "D2Coding.ttc"
+IDR_FONT_NOTOSANS           RT_FONT "NotoSansKR.ttc"
+
+IDR_FONT_POPPINS            RT_FONT "Poppins.ttc"
+IDR_FONT_ROBOTO             RT_FONT "Roboto.ttc"
+IDR_FONT_D2CODING           RT_FONT "D2Coding.ttc"

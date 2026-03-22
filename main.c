@@ -274,7 +274,21 @@ static void unload_fonts_from_resource(void) {
     UNLOAD_FONT(g_font_handle_poppins);
     UNLOAD_FONT(g_font_handle_roboto);
     UNLOAD_FONT(g_font_handle_d2coding);
+}
 
+// ███████╗░█████╗░███╗░░██╗████████╗░░░░░░██████╗░██╗░█████╗░██╗░░██╗███████╗██████╗░
+// ██╔════╝██╔══██╗████╗░██║╚══██╔══╝░░░░░░██╔══██╗██║██╔══██╗██║░██╔╝██╔════╝██╔══██╗
+// █████╗░░██║░░██║██╔██╗██║░░░██║░░░░░░░░░██████╔╝██║██║░░╚═╝█████═╝░█████╗░░██████╔╝
+// ██╔══╝░░██║░░██║██║╚████║░░░██║░░░░░░░░░██╔═══╝░██║██║░░██╗██╔═██╗░██╔══╝░░██╔══██╗
+// ██║░░░░░╚█████╔╝██║░╚███║░░░██║░░░█████╗██║░░░░░██║╚█████╔╝██║░╚██╗███████╗██║░░██║
+// ╚═╝░░░░░░╚════╝░╚═╝░░╚══╝░░░╚═╝░░░╚════╝╚═╝░░░░░╚═╝░╚════╝░╚═╝░░╚═╝╚══════╝╚═╝░░╚═╝
+static char g_subtitle_font_family[LF_FACESIZE] = FONT_SUBTITLE_FAMILY;
+
+static void on_font_pick(const char *family, void *ud) {
+    (void) ud;
+    strncpy_s(g_subtitle_font_family, LF_FACESIZE, family, _TRUNCATE);
+    mpv_set_option_string(mpv, "sub-font", g_subtitle_font_family);
+    pxvy_set_subtitle_font(g_subtitle_font_family); // DB 저장
 }
 
 // ─────────────────────────────────────────────────────────
@@ -478,6 +492,8 @@ static char g_pending_sub[MAX_PATH * 3] = {0};
 
 static void load_file(const char *path) {
     if (!mpv) return;
+
+
 
     // ── smi_to_srt.exe -s "절대경로" 실행 후 stdout에서 자막 경로 수신 ──
     char sub_path[MAX_PATH * 3] = {0};
@@ -2742,8 +2758,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         g_play_speed -= 0.1f;
                     }
                     break;
-                case 'F': g_show_fps = !g_show_fps;
-                    break;
+                case 'F': {
+                    if (g_ctrl_down) {
+                        show_font_picker(hWnd,
+                                         g_subtitle_font_family,
+                                         on_font_pick, NULL);
+                    } else {
+                        g_show_fps = !g_show_fps;
+                    }
+                }
+                break;
                 case VK_CONTROL: g_ctrl_down = TRUE;
                     break;
                 case VK_TAB: g_show_info = !g_show_info;
@@ -2761,16 +2785,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         }
                     }
                     break;
-                case 'Q':
+                case 'Q': {
                     if (g_ctrl_down) PostMessageA(hWnd, WM_CLOSE, 0, 0);
-                    break;
+                }break;
+#ifdef _DEBUG
+                case 'M': {
+                    show_msgbox(hWnd, "알림", "저장되었습니다.", MB_OK, NULL, NULL);
+                }break;
+#endif
+
                 default: break;
             }
             return 0;
         }
         break;
         case WM_KEYUP: {
-            if (wParam == VK_CONTROL) g_ctrl_down = FALSE;
+            if (wParam == VK_CONTROL) {
+                g_ctrl_down = FALSE;
+            }
         }
         break;
         case WM_MOUSEWHEEL: {
@@ -2856,7 +2888,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
                 case ID_PLAYLIST: break;
                 case ID_TOOLS: break;
-                case ID_SETTINGS: break;
+                case ID_SETTINGS: {
+                    show_font_picker(hWnd,
+                                     g_subtitle_font_family,
+                                     on_font_pick, NULL);
+                }
+                break;
                 case ID_EXIT: {
                     PostQuitMessage(0);
                 }
@@ -2882,7 +2919,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (cmd >= ID_RECENT_VIDEO_BASE && cmd < ID_RECENT_VIDEO_BASE + 10) {
                 int idx = cmd - ID_RECENT_VIDEO_BASE;
                 if (idx < g_recent_count) {
-                    // 기존 파일 열기 루틴에 g_recent_video[idx] 전달
+
+                    // UTF-8 → Wide 변환 후 파일 존재 여부 확인
+                    WCHAR wpath[MAX_PATH] = {0};
+                    MultiByteToWideChar(CP_UTF8, 0,
+                                        g_recent_video[idx], -1,
+                                        wpath, MAX_PATH);
+
+                    if (GetFileAttributesW(wpath) == INVALID_FILE_ATTRIBUTES) {
+                        char msg[MAX_PATH + 64];
+                        snprintf(msg, sizeof(msg),
+                                 "File not found:\n%s", g_recent_video[idx]);
+                        show_msgbox(hWnd, "Error", msg, MB_OK, NULL, NULL);
+
+                        pxvy_remove_recent_video(g_recent_video[idx]);
+
+                        // g_recent_video 메모리에서 제거 후 shift
+                        for (int i = idx; i < g_recent_count - 1; i++)
+                            memcpy(g_recent_video[i], g_recent_video[i + 1], MAX_PATH + 3);
+                        memset(g_recent_video[--g_recent_count], 0, MAX_PATH + 3);
+                        break;
+                    }
+
                     load_file(g_recent_video[idx]);
                     pxvy_add_recent_video(g_recent_video[idx]);
                 }
@@ -2918,7 +2976,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
         default: break;
     }
-    return DefWindowProcA(hWnd, msg, wParam, lParam);
+    return DefWindowProcW(hWnd, msg, wParam, lParam);
 }
 
 // ──────────────────── WinMain ────────────────────
@@ -2964,7 +3022,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     pxvy_db_init();
     CheckOSTheme();
     SetPrimaryColor();
-    say("WINMAIN: %d, %d, %d",g_primary_color.r,g_primary_color.g,g_primary_color.b);
+    say("WINMAIN: %d, %d, %d", g_primary_color.r, g_primary_color.g, g_primary_color.b);
 
     // [변경] ① 폰트 리소스 로드 (init_font 전에 반드시 호출)
     load_fonts_from_resource(inst);
@@ -3058,7 +3116,12 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     mpv_set_option_string(mpv, "background-color", "#222529");
 
     {
-        mpv_set_option_string(mpv, "sub-font", FONT_SUBTITLE_FAMILY);
+        if (pxvy_get_subtitle_font(g_subtitle_font_family, LF_FACESIZE) != 0)
+            strncpy_s(g_subtitle_font_family, LF_FACESIZE,
+                      FONT_SUBTITLE_FAMILY, _TRUNCATE); // 실패 시 기본값
+        mpv_set_option_string(mpv, "sub-font", g_subtitle_font_family);
+
+        //mpv_set_option_string(mpv, "sub-font", FONT_SUBTITLE_FAMILY);
         mpv_set_option_string(mpv, "sub-font-size", "48");
         mpv_set_option_string(mpv, "sub-bold", "yes");
         mpv_set_option_string(mpv, "sub-border-size", "2.5");
