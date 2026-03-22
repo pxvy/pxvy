@@ -1,3 +1,11 @@
+#include <mimalloc.h>
+
+// malloc / free / calloc / realloc 전역 교체
+// void *malloc(size_t n)              { return mi_malloc(n); }
+// void *calloc(size_t n, size_t sz)   { return mi_calloc(n, sz); }
+// void *realloc(void *p, size_t n)    { return mi_realloc(p, n); }
+// void  free(void *p)                 { mi_free(p); }
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 #ifndef M_PI
@@ -2734,8 +2742,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     return 0;
                 }
                 case CTRL_SETTINGS:
-                    MessageBoxA(hWnd,
-                                "PXVY Settings\n\n"
+                    show_msgbox(hWnd,
+                                "Settings",
                                 "Keyboard Shortcuts:\n"
                                 "  Space       Play / Pause\n"
                                 "  Left/Right  Seek -5 / +5 sec\n"
@@ -2746,7 +2754,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                 "Mouse:\n"
                                 "  Scroll      Volume\n"
                                 "  Right-click Context menu",
-                                "Settings", MB_OK | MB_ICONINFORMATION);
+                                MB_OK, NULL, NULL);
                     return 0;
                 case CTRL_REPEAT:
                     g_repeat_mode = (g_repeat_mode + 1) % 3;
@@ -3264,8 +3272,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
         MessageBoxA(NULL, "mpv_render_context_create() failed", "Error", MB_OK);
         return 1;
     }
-
-    mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &g_volume);
+    double current_volume = g_volume;
+    mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &current_volume);
 
     mpv_render_context_set_update_callback(mpv_gl, on_mpv_render_update, NULL);
     mpv_set_wakeup_callback(mpv, mpv_wakeup_cb, (void *) g_hWnd);

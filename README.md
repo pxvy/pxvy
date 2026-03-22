@@ -130,9 +130,10 @@ powershell [guid]::NewGuid().Guid
 * Ctrl + Q: 프로그램 종료
 * Ctrl + O: 파일 열기
 * Ctrl + F: 폰트 선택
+* Ctrl + S: 화면 캡쳐
 * H: 캡션바, 컨트롤뷰, 커서 숨기기
   * 구현 예정
   * 
 
 
- 
+
