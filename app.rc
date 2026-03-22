@@ -1,6 +1,7 @@
 #include "resource.h"
 IDI_MAIN_ICON               ICON    "logo.ico"
-
+IDR_LOGO_PNG                RCDATA  "logo.png"
+IDR_LOGO_SYMBOL             RCDATA  "symbol.png"
 IDR_FONT_NOTOSANS           RT_FONT "NotoSansKR.ttc"
 
 IDR_FONT_POPPINS            RT_FONT "Poppins.ttc"

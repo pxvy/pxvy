@@ -160,6 +160,62 @@ static GLuint ab_load_tex(const char *path,
     return t;
 }
 
+// RC_DATA 리소스에서 텍스처 로드 (stbi_load_from_memory 사용)
+static GLuint ab_load_tex_from_rc(int rc_id,
+                                  int target_w, int target_h,
+                                  int *out_w, int *out_h) {
+    HRSRC hRes = FindResourceA(NULL, MAKEINTRESOURCEA(rc_id), RT_RCDATA);
+    HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
+    void *pData = hGlob ? LockResource(hGlob) : NULL;
+    DWORD nSize = hRes ? SizeofResource(NULL, hRes) : 0;
+
+    if (!pData || nSize == 0) {
+        if (out_w) *out_w = 0;
+        if (out_h) *out_h = 0;
+        return 0;
+    }
+
+    int sw, sh, ch;
+    unsigned char *src = stbi_load_from_memory(
+        (const stbi_uc *) pData, (int) nSize, &sw, &sh, &ch, 4);
+    if (!src) {
+        if (out_w) *out_w = 0;
+        if (out_h) *out_h = 0;
+        return 0;
+    }
+
+    int dw = (target_w > 0) ? target_w : sw;
+    int dh = (target_h > 0) ? target_h : sh;
+
+    unsigned char *dst;
+    if (dw == sw && dh == sh) {
+        dst = src;
+    } else {
+        dst = (unsigned char *) malloc((size_t) dw * dh * 4);
+        if (!dst) {
+            stbi_image_free(src);
+            return 0;
+        }
+        stbir_resize_uint8_linear(src, sw, sh, 0,
+                                  dst, dw, dh, 0, STBIR_RGBA);
+        stbi_image_free(src);
+    }
+
+    GLuint t;
+    glGenTextures(1, &t);
+    glBindTexture(GL_TEXTURE_2D, t);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dw, dh, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, dst);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    free(dst);
+
+    if (out_w) *out_w = dw;
+    if (out_h) *out_h = dh;
+    return t;
+}
+
 // 텍스처 쿼드 렌더
 static void ab_quad_tex(GLuint tex, float x, float y, float w, float h) {
     glEnable(GL_TEXTURE_2D);
@@ -654,26 +710,32 @@ static void show_about_window(HWND owner) {
     wglMakeCurrent(ctx->gl_dc, ctx->gl_rc);
     ab_init_font(ctx->gl_dc);
 
-    char exe[MAX_PATH], sym[MAX_PATH], logo[MAX_PATH];
-    GetModuleFileNameA(NULL, exe, MAX_PATH);
-    char *sl = strrchr(exe, '\\');
-    if (sl) *(sl + 1) = '\0';
-    snprintf(sym, MAX_PATH, "%ssymbol.png", exe);
-    snprintf(logo, MAX_PATH, "%slogo.png", exe);
+    ctx->sym_tex = ab_load_tex_from_rc(IDR_LOGO_SYMBOL, ABOUT_SYM_SZ, ABOUT_SYM_SZ, NULL, NULL);
 
-    // symbol: main.c 와 동일하게 20×20 으로 리사이즈
-    ctx->sym_tex = ab_load_tex(sym, ABOUT_SYM_SZ, ABOUT_SYM_SZ, NULL, NULL);
-
-    // logo: 비율 유지 최대 ABOUT_LOGO_SZ
+    // logo: 비율 유지 최대 ABOUT_LOGO_SZ (기존 유지)
     {
         int ow, oh;
-        ab_load_tex(logo, -1, -1, &ow, &oh); // 원본 크기 측정
+        ab_load_tex_from_rc(IDR_LOGO_SYMBOL, -1, -1, &ow, &oh);
         if (ow > 0 && oh > 0) {
             float sc = (float) ABOUT_LOGO_SZ /
                        (float) (ow > oh ? ow : oh);
             int tw = (int) (ow * sc), th = (int) (oh * sc);
-            ctx->logo_tex = ab_load_tex(logo, tw, th,
-                                        &ctx->logo_w, &ctx->logo_h);
+            ctx->sym_tex = ab_load_tex_from_rc(IDR_LOGO_SYMBOL, tw, th,
+                                               &ctx->logo_w, &ctx->logo_h);
+        }
+    }
+
+    // logo: 비율 유지 최대 ABOUT_LOGO_SZ
+    {
+        int ow, oh;
+        // 원본 크기 측정 (target -1 = 원본 크기)
+        ab_load_tex_from_rc(IDR_LOGO_PNG, -1, -1, &ow, &oh);
+        if (ow > 0 && oh > 0) {
+            float sc = (float) ABOUT_LOGO_SZ /
+                       (float) (ow > oh ? ow : oh);
+            int tw = (int) (ow * sc), th = (int) (oh * sc);
+            ctx->logo_tex = ab_load_tex_from_rc(IDR_LOGO_PNG, tw, th,
+                                                &ctx->logo_w, &ctx->logo_h);
         }
     }
 

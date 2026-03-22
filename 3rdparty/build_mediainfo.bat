@@ -4,7 +4,7 @@ setlocal EnableExtensions
 rem ===== user settings =====
 set "MSYS2_ROOT=C:\msys64"
 set "MSYS2_SHELL=%MSYS2_ROOT%\msys2_shell.cmd"
-set "WORKDIR=%~dp0build_mediainfo_work"
+set "WORKDIR=%~dp0TEMP_BUILD"
 set "INSTALL_DIR=%WORKDIR%\install"
 
 rem ===== bash 에서 쓸 경로 형식으로 변환 =====
@@ -116,4 +116,26 @@ if errorlevel 1 (
 
 echo [OK] build finished
 echo [OK] output: %INSTALL_DIR%
+
+pwd
+
+cd .\TEMP_BUILD\install\include\
+xcopy * "..\..\..\include\" /E /I /Y
+
+cd ..\bin
+copy /Y "libmediainfo.dll" "..\..\..\bin\"
+cd ..\lib
+copy /Y "libmediainfo.dll.a" "..\..\..\lib\"
+copy /Y "libzen.a" "..\..\..\lib\"
+
+cd ..\..\..
+call :SafeRMDIR "TEMP_BUILD"
+
+pause
 exit /b 0
+
+:SafeRMDIR
+IF EXIST "%~1" (
+    RMDIR /S /Q "%~1"
+)
+exit /b

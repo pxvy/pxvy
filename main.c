@@ -1,4 +1,4 @@
-#include <mimalloc.h>
+//#include <mimalloc.h>
 
 // malloc / free / calloc / realloc 전역 교체
 // void *malloc(size_t n)              { return mi_malloc(n); }
@@ -349,6 +349,12 @@ static void request_capture(void) {
 
 // $$$$$$$$$$$$$$$$$$$$$ Mediainfo $$$$$$$$$$$$$$$$$$$$$$$$$$
 #include "mediainfo_c.h"
+
+static void glColor4f_255(int _r, int _g, int _b, float _a) {
+    glColor4f(_r / 255.0f, _g / 255.0f, _b / 255.0f, _a);
+}
+
+#include "context_menu.h"
 char g_file_info[4096] = {0};
 static volatile BOOL g_show_info = FALSE;
 
@@ -524,10 +530,10 @@ static void load_file(const char *path) {
 
         // ② -1 같은 이름의 .smi 파일 존재 여부 확인
         wchar_t smi_path_w[MAX_PATH * 3];
-        wcscpy(smi_path_w, path_w);
+        wcsncpy(smi_path_w, path_w,_countof(smi_path_w));
         wchar_t *dot_w = wcsrchr(smi_path_w, L'.');
         if (!dot_w) goto run_mpv;
-        wcscpy(dot_w, L".smi");
+        wcsncpy(dot_w, L".smi",_countof(dot_w));
         if (GetFileAttributesW(smi_path_w) == INVALID_FILE_ATTRIBUTES)
             goto run_mpv;
 
@@ -581,6 +587,7 @@ static void load_file(const char *path) {
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
         } else {
+            show_msgbox(NULL, "Error", "SMI2SRT Failed!",MB_OK,NULL,NULL);
             if (hWrite) CloseHandle(hWrite);
         }
         CloseHandle(hRead);
@@ -665,9 +672,6 @@ static void handle_mpv_events(void) {
     }
 }
 
-static void glColor4f_255(int _r, int _g, int _b, float _a) {
-    glColor4f(_r / 255.0f, _g / 255.0f, _b / 255.0f, _a);
-}
 
 // ──────────────────── 프레임 캡처 ────────────────────
 #include "timetime.h"
@@ -705,7 +709,7 @@ static void capture_frame_to_dib(void) {
     // "subtitles" : 자막 포함하고 싶을 때
     const char *cmd[] = {"screenshot-to-file", capture_path, "video", NULL};
     if (mpv_command(mpv, cmd) < 0)
-        fprintf(stderr, "capture: mpv screenshot-to-file failed\n");
+        say("capture: mpv screenshot-to-file failed\n");
     else
         say("capture: saved -> %s", capture_path);
 }
@@ -966,21 +970,30 @@ static void gl_info_rebuild_cache(
     DeleteObject(hFont);
 }
 
-static void load_logo_texture(const char *path, int target_w, int target_h) {
+static void load_logo_texture(int rc_id, int target_w, int target_h) {
+    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(rc_id), RT_RCDATA);
+    HGLOBAL hGlob = hRes  ? LoadResource(NULL, hRes)   : NULL;
+    void   *pData = hGlob ? LockResource(hGlob)        : NULL;
+    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+
+    if (!pData || nSize == 0) {
+        MessageBoxA(NULL, "Error loading logo texture", "Error", MB_OK);
+        exit(EXIT_FAILURE);
+    }
+
     int src_w, src_h, ch;
-    unsigned char *src = stbi_load(path, &src_w, &src_h, &ch, 4);
+    unsigned char *src = stbi_load_from_memory(
+        (const stbi_uc *)pData, (int)nSize, &src_w, &src_h, &ch, 4);
     if (!src) {
         MessageBoxA(NULL, "Error loading logo texture", "Error", MB_OK);
         exit(EXIT_FAILURE);
     }
 
-    unsigned char *dst = (unsigned char *) malloc(target_w * target_h * 4);
-    if (!dst) {
-        stbi_image_free(src);
-        return;
-    }
+    unsigned char *dst = (unsigned char *)malloc(target_w * target_h * 4);
+    if (!dst) { stbi_image_free(src); return; }
 
-    stbir_resize_uint8_linear(src, src_w, src_h, 0, dst, target_w, target_h, 0, STBIR_RGBA);
+    stbir_resize_uint8_linear(src, src_w, src_h, 0,
+                               dst, target_w, target_h, 0, STBIR_RGBA);
     stbi_image_free(src);
 
     if (g_logo_tex) glDeleteTextures(1, &g_logo_tex);
@@ -996,7 +1009,6 @@ static void load_logo_texture(const char *path, int target_w, int target_h) {
     g_logo_w = target_w;
     g_logo_h = target_h;
 }
-
 static float gl_measure_string(const char *str) {
     float w = 0.0f;
     for (const char *p = str; *p; p++) {
@@ -2160,7 +2172,6 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
     return 0;
 }
 
-#include "context_menu.h"
 
 void SetPrimaryColor(void) {
     g_primary_color = pxvy_get_color();
@@ -3043,7 +3054,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
                         // g_recent_video 메모리에서 제거 후 shift
                         for (int i = idx; i < g_recent_count - 1; i++)
-                            memcpy(g_recent_video[i], g_recent_video[i + 1], MAX_PATH + 3);
+                            memmove(g_recent_video[i], g_recent_video[i + 1], MAX_PATH + 3);
                         memset(g_recent_video[--g_recent_count], 0, MAX_PATH + 3);
                         break;
                     }
@@ -3179,19 +3190,25 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     char *last_slash = strrchr(exe_dir, '\\');
     if (last_slash) *(last_slash + 1) = '\0';
 
-    char symbol_path[MAX_PATH];
-    snprintf(symbol_path, sizeof(symbol_path), "%ssymbol.png", exe_dir);
-    load_logo_texture(symbol_path, 20, 20);
+    load_logo_texture(IDR_LOGO_SYMBOL, 20, 20);
 
     if (!g_splash_tex) {
+    // ── 리소스에서 BMP 로드 ──────────────────────────────
+    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_PNG), RT_RCDATA);
+    HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
+    void   *pData = hGlob ? LockResource(hGlob) : NULL;
+    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+
+    if (pData && nSize) {
         int sw, sh, ch;
-        char logo_path[MAX_PATH];
-        snprintf(logo_path, sizeof(symbol_path), "%slogo.png", exe_dir);
-        unsigned char *src = stbi_load(logo_path, &sw, &sh, &ch, 4);
+        unsigned char *src = stbi_load_from_memory(
+            (const stbi_uc *)pData, (int)nSize, &sw, &sh, &ch, 4);
+
         if (src) {
-            unsigned char *dst = (unsigned char *) malloc(360 * 360 * 4);
+            unsigned char *dst = (unsigned char *)malloc(360 * 360 * 4);
             if (dst) {
-                stbir_resize_uint8_linear(src, sw, sh, 0, dst, 360, 360, 0, STBIR_RGBA);
+                stbir_resize_uint8_linear(src, sw, sh, 0,
+                                          dst, 360, 360, 0, STBIR_RGBA);
                 glGenTextures(1, &g_splash_tex);
                 glBindTexture(GL_TEXTURE_2D, g_splash_tex);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 360, 360, 0,
@@ -3205,7 +3222,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
             }
             stbi_image_free(src);
         }
+        // LockResource/LoadResource는 FreeResource 불필요 (Windows 32+)
     }
+}
 
     mpv = mpv_create();
     if (!mpv) {

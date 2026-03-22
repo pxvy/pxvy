@@ -3,6 +3,8 @@
 #define RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_RESOURCES_H
 
 #define IDI_MAIN_ICON               101
+#define IDR_LOGO_PNG                102
+#define IDR_LOGO_SYMBOL             103
 
 #define IDR_FONT_POPPINS            200
 #define IDR_FONT_ROBOTO             201
