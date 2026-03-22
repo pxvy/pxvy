@@ -30,7 +30,6 @@ elseif (MSVC)
 endif ()
 
 
-
 # === === === === 3rdparty === === === ===
 set(_3RDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
 set(_3RDPARTY_INCLUDE_DIR "${_3RDPARTY_DIR}/include")

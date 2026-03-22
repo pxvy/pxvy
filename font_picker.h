@@ -483,6 +483,9 @@ static void fp_render_gl(FpCtx *ctx) {
     const float ITEM_H = (float) FP_ITEM_H;
 
     ctx->scroll_max = fmaxf(0.0f, ctx->filtered_count * ITEM_H - LIST_H);
+    ctx->scroll_max = fmaxf(0.0f, ctx->filtered_count * ITEM_H - LIST_H);
+    ctx->scroll_y = fmaxf(0.0f, fminf(ctx->scroll_y, ctx->scroll_max));
+
 
     glEnable(GL_SCISSOR_TEST);
     glScissor((GLint) FP_LIST_X, (GLint) (H - LIST_BOT),
@@ -1025,8 +1028,8 @@ static void show_font_picker(HWND owner, const char *current,
     fp_build_full_list(ctx);
 
     // 이름 텍스처 캐시 배열 할당 (0으로 초기화 = 지연 생성)
-    ctx->name_textures = (FpNameTex *) calloc(ctx->all_count, sizeof(FpNameTex));
-
+    ctx->name_textures = (FpNameTex *) malloc(ctx->all_count * sizeof(FpNameTex));
+    memset(ctx->name_textures, 0, ctx->all_count * sizeof(FpNameTex));
     // current 항목으로 초기 선택
     if (current) {
         for (int fi = 0; fi < ctx->filtered_count; fi++) {
@@ -1067,8 +1070,8 @@ static void show_font_picker(HWND owner, const char *current,
 
     // 선택 항목 초기 스크롤
     {
-        const float LH = (float) (FP_H - FP_FOOTER_H - FP_LIST_TOP_Y);
-        float iy = ctx->selected * (float) FP_ITEM_H;
+        const float LH = (float)(FP_H - FP_FOOTER_H - FP_LIST_TOP_Y);
+        float iy = ctx->selected * (float)FP_ITEM_H;
         if (iy + FP_ITEM_H > LH) ctx->scroll_y = iy + FP_ITEM_H - LH;
     }
 

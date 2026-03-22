@@ -1,3 +1,6 @@
+@echo off
+setlocal
+
 python -m nuitka smi_to_srt.py ^
   --onefile ^
   --lto=yes ^
@@ -13,6 +16,17 @@ python -m nuitka smi_to_srt.py ^
   --noinclude-dask-mode=nofollow ^
   --windows-icon-from-ico=python.ico
 
+if errorlevel 1 exit /b 1
 
-:: smi_to_srt.exe를 ../cmake-build-debug/ 에 복사
-:: smi_to_srt.exe를 ../cmake-build-release/ 에 복사
+for %%D in (
+    "..\cmake-build-debug"
+    "..\cmake-build-debug-llvm"
+    "..\cmake-build-release"
+    "..\cmake-build-release-llvm"
+) do (
+    if exist "%%~D" (
+        copy /Y "smi_to_srt.exe" "%%~D\smi_to_srt.exe"
+    )
+)
+
+endlocal

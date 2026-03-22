@@ -9,7 +9,8 @@
 #include "stb_image.h"
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize2.h"
-
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include <Windows.h>
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
@@ -32,7 +33,6 @@
 #include "build_time.h"
 #include <mmdeviceapi.h>
 #include <endpointvolume.h>
-#include "wmmap.h"
 
 // GUID 직접 정의
 static const CLSID MY_CLSID_MMDeviceEnumerator = {
@@ -189,6 +189,7 @@ static volatile BOOL g_seeking = FALSE;
 static volatile BOOL g_vol_dragging = FALSE;
 static volatile double g_seek_frac = 0.0;
 static volatile double g_vol_frac = 1.0;
+static volatile double g_volume = 100.0;
 static volatile BOOL g_ctrl_down = FALSE;
 static volatile BOOL g_is_muted = FALSE;
 
@@ -294,10 +295,9 @@ static void on_font_pick(const char *family, void *ud) {
 }
 
 // ─────────────────────────────────────────────────────────
+static char g_file_path[MAX_PATH + 1] = {0};
+static volatile BOOL g_capture_requested = FALSE;
 
-void SetPrimaryColor(void) {
-    g_primary_color = pxvy_get_color();
-}
 
 void CheckOSTheme(void) {
     BOOL is_dark_mode = TRUE;
@@ -334,6 +334,10 @@ void CheckOSTheme(void) {
 
 static volatile BOOL g_pending_show = FALSE;
 static int g_pending_show_cmd = SW_SHOWNORMAL;
+
+static void request_capture(void) {
+    g_capture_requested = TRUE;
+}
 
 // $$$$$$$$$$$$$$$$$$$$$ Mediainfo $$$$$$$$$$$$$$$$$$$$$$$$$$
 #include "mediainfo_c.h"
@@ -495,8 +499,8 @@ static char g_pending_sub[MAX_PATH * 3] = {0};
 static void load_file(const char *path) {
     if (!mpv) return;
 
-
-
+    memset(g_file_path, 0, sizeof(g_file_path));
+    strncpy(g_file_path, path, MAX_PATH);
     // ── smi_to_srt.exe -s "절대경로" 실행 후 stdout에서 자막 경로 수신 ──
     char sub_path[MAX_PATH * 3] = {0};
     {
@@ -658,22 +662,44 @@ static void glColor4f_255(int _r, int _g, int _b, float _a) {
 }
 
 // ──────────────────── 프레임 캡처 ────────────────────
+#include "timetime.h"
 
-static void capture_frame_to_dib(int w, int h) {
-    int needed = w * h * 4;
-    EnterCriticalSection(&g_frame_cs);
-    if (needed > g_frame_buf_size) {
-        free(g_frame_buf);
-        g_frame_buf = (unsigned char *) malloc(needed);
-        g_frame_buf_size = g_frame_buf ? needed : 0;
-    }
-    if (g_frame_buf) {
-        glReadPixels(0, 0, w, h, GL_BGRA_EXT, GL_UNSIGNED_BYTE, g_frame_buf);
-        g_frame_w = w;
-        g_frame_h = h;
-        g_frame_valid = TRUE;
-    }
-    LeaveCriticalSection(&g_frame_cs);
+static void capture_frame_to_dib(void) {
+    // 이 함수는 반드시 GL 컨텍스트가 current인 렌더 스레드에서 호출되어야 함
+
+    int capture_format_idx = pxvy_db_get_capture_type();
+    char capture_format[8] = {0};
+    if (capture_format_idx == 1) strncpy(capture_format, ".png", 5);
+    else if (capture_format_idx == 2) strncpy(capture_format, ".jpg", 5);
+    else return;
+
+    char capture_dir_path[MAX_PATH];
+    pxvy_db_get_capture_path(capture_dir_path);
+    SHCreateDirectoryExA(NULL, capture_dir_path, NULL);
+
+    char time_str[64] = {0};
+    yyyy_mm_dd_hh_mm_ss_ms(time_str);
+
+    // g_file_path에서 경로/확장자 제거
+    char base_name[MAX_PATH] = {0};
+    const char *file_part = strrchr(g_file_path, '\\');
+    file_part = file_part ? file_part + 1 : g_file_path;
+    strncpy(base_name, file_part, MAX_PATH - 1);
+    char *dot = strrchr(base_name, '.');
+    if (dot) *dot = '\0';
+
+    char capture_path[MAX_PATH] = {0};
+    snprintf(capture_path, MAX_PATH, "%s\\%s_%s%s",
+             capture_dir_path, base_name, time_str, capture_format);
+
+    // mpv에게 직접 저장 요청
+    // "video"  : 원본 해상도, 캡션/컨트롤 없음
+    // "subtitles" : 자막 포함하고 싶을 때
+    const char *cmd[] = {"screenshot-to-file", capture_path, "video", NULL};
+    if (mpv_command(mpv, cmd) < 0)
+        fprintf(stderr, "capture: mpv screenshot-to-file failed\n");
+    else
+        say("capture: saved -> %s", capture_path);
 }
 
 // ──────────────────── mpv 콜백 ────────────────────
@@ -1918,7 +1944,8 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
             if (!g_fullscreen) gl_draw_caption(w, h, oa);
 
             {
-                double time_pos = 0.0, dur = g_duration, vol = 100.0;
+                double time_pos = 0.0, dur = g_duration;
+                double vol;
                 int is_paused = g_paused;
                 mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos);
                 mpv_get_property(mpv, "volume", MPV_FORMAT_DOUBLE, &vol);
@@ -2112,6 +2139,10 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
         }
         if (g_aspect_ratio <= 0.0)
             Sleep(16);
+        if (g_capture_requested) {
+            g_capture_requested = FALSE;
+            capture_frame_to_dib();
+        }
         SwapBuffers(g_hDC);
         DwmFlush();
         mpv_render_context_report_swap(mpv_gl);
@@ -2122,6 +2153,34 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
 }
 
 #include "context_menu.h"
+
+void SetPrimaryColor(void) {
+    g_primary_color = pxvy_get_color();
+
+    // g_selected_theme 계산: RGB로 테마 테이블에서 일치하는 ID 탐색
+    g_selected_theme = 0; // 없으면 0 (체크 안 됨)
+    for (int i = 0; i < g_theme_color_count; i++) {
+        if (g_theme_colors[i].r == g_primary_color.r &&
+            g_theme_colors[i].g == g_primary_color.g &&
+            g_theme_colors[i].b == g_primary_color.b) {
+            g_selected_theme = g_theme_colors[i].id;
+            break;
+        }
+    }
+}
+
+void SetCaptureFormat(void) {
+    int capture_format_idx = pxvy_db_get_capture_type();
+    char capture_format[8] = {0};
+
+    if (capture_format_idx == 1) strncpy(capture_format, ".png", 5);
+    else if (capture_format_idx == 2) strncpy(capture_format, ".jpg", 5);
+    else return;
+
+    // g_selected_screenshot_format 계산
+    if (capture_format_idx == 1) g_selected_screenshot_format = ID_SCREENSHOT_PNG;
+    else if (capture_format_idx == 2) g_selected_screenshot_format = ID_SCREENSHOT_JPG;
+}
 
 // ──────────────────── WndProc ────────────────────
 void MaximizeWindow(HWND hWnd) {
@@ -2197,8 +2256,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     switch (msg) {
         case WM_PAINT: {
-            // 비디오가 아닌 오디오나, 기본화면일때는 여기서 그리게
-        }break;
+        }
+        break;
         case WM_SETTINGCHANGE: {
             if (lParam && lstrcmpiW((LPCWSTR) lParam, L"ImmersiveColorSet") == 0) {
                 CheckOSTheme();
@@ -2554,6 +2613,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (mpv) {
                     double vol = f * 100.0;
                     mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &vol);
+                    g_volume = vol;
                 }
                 return 0;
             }
@@ -2664,6 +2724,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     SetCapture(hWnd);
                     double vol = f * 100.0;
                     mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &vol);
+                    g_volume = vol;
                     return 0;
                 }
                 case CTRL_VOL_ICON: {
@@ -2736,15 +2797,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 case VK_UP: {
                     const char *c[] = {"add", "volume", "5", NULL};
                     mpv_command_async(mpv, 0, c);
+                    if (g_volume <= 100.0 - EPSILON) {
+                        g_volume += 5.0;
+                    }
                 }
                 break;
                 case VK_DOWN: {
                     const char *c[] = {"add", "volume", "-5", NULL};
                     mpv_command_async(mpv, 0, c);
+                    if (g_volume > 0.0 - EPSILON) {
+                        g_volume -= 5.0;
+                    }
                 }
                 break;
-                case VK_RETURN: toggle_fullscreen(hWnd);
-                    break;
+                case VK_RETURN: {
+                    if (g_is_playing) {
+                        toggle_fullscreen(hWnd);
+                    }
+                }
+                break;
                 case VK_ESCAPE:
                     if (g_fullscreen) toggle_fullscreen(hWnd);
                     else ShowWindow(hWnd, SW_MINIMIZE);
@@ -2792,11 +2863,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     break;
                 case 'Q': {
                     if (g_ctrl_down) PostMessageA(hWnd, WM_CLOSE, 0, 0);
-                }break;
+                }
+                case 'S': {
+                    if (g_ctrl_down) {
+                        if (g_is_playing) {
+                            request_capture();
+                        } else {
+                            show_msgbox(hWnd, "Warning", "No media!", MB_OK, NULL, NULL);
+                        }
+                    }
+                }
+                break;
 #ifdef _DEBUG
                 case 'M': {
-                    show_msgbox(hWnd, "알림", "저장되었습니다.", MB_OK, NULL, NULL);
-                }break;
+                    show_msgbox(hWnd, "Error", "Debug Message.", MB_OK, NULL, NULL);
+                }
+                break;
 #endif
 
                 default: break;
@@ -2822,9 +2904,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (delta > 0) {
                     const char *c[] = {"add", "volume", "5", NULL};
                     mpv_command_async(mpv, 0, c);
+                    if (g_volume <= 100.0 - EPSILON) {
+                        g_volume += 5.0;
+                    }
                 } else {
                     const char *c[] = {"add", "volume", "-5", NULL};
                     mpv_command_async(mpv, 0, c);
+                    if (g_volume > 0.0 - EPSILON) {
+                        g_volume -= 5.0;
+                    }
                 }
             }
             return 0;
@@ -2892,7 +2980,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     break;
                 }
                 case ID_PLAYLIST: break;
-                case ID_TOOLS: break;
+                case ID_SCREENSHOT_CAPTURE: {
+                    if (g_is_playing) {
+                        request_capture();
+                    } else {
+                        show_msgbox(hWnd, "Warning", "No media!", MB_OK, NULL, NULL);
+                    }
+                };
+                    break;
                 case ID_SETTINGS: {
                     show_font_picker(hWnd,
                                      g_subtitle_font_family,
@@ -2924,7 +3019,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (cmd >= ID_RECENT_VIDEO_BASE && cmd < ID_RECENT_VIDEO_BASE + 10) {
                 int idx = cmd - ID_RECENT_VIDEO_BASE;
                 if (idx < g_recent_count) {
-
                     // UTF-8 → Wide 변환 후 파일 존재 여부 확인
                     WCHAR wpath[MAX_PATH] = {0};
                     MultiByteToWideChar(CP_UTF8, 0,
@@ -2955,6 +3049,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
         case WM_DESTROY: {
+            pxvy_db_set_volume(g_volume);
             KillTimer(hWnd, IDT_MOUSE_CHECK);
 #ifdef _DEBUG
             FreeConsole();
@@ -3027,8 +3122,10 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     pxvy_db_init();
     CheckOSTheme();
     SetPrimaryColor();
+    SetCaptureFormat();
     say("WINMAIN: %d, %d, %d", g_primary_color.r, g_primary_color.g, g_primary_color.b);
 
+    g_volume = pxvy_db_get_volume();
     // [변경] ① 폰트 리소스 로드 (init_font 전에 반드시 호출)
     load_fonts_from_resource(inst);
 
@@ -3060,7 +3157,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 
     if (!init_opengl(g_hWnd)) {
-        MessageBoxA(NULL, "OpenGL init failed", "Error", MB_OK);
+        MessageBoxW(NULL, L"OpenGL init failed", L"Error", MB_OK);
         return EXIT_FAILURE;
     }
     wglMakeCurrent(g_hDC, g_hRC);
@@ -3104,7 +3201,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
 
     mpv = mpv_create();
     if (!mpv) {
-        MessageBoxA(NULL, "mpv_create() failed", "Error", MB_OK);
+        MessageBoxW(NULL, L"mpv_create() failed", L"Error", MB_OK);
         return 1;
     }
 
@@ -3168,6 +3265,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
         return 1;
     }
 
+    mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &g_volume);
+
     mpv_render_context_set_update_callback(mpv_gl, on_mpv_render_update, NULL);
     mpv_set_wakeup_callback(mpv, mpv_wakeup_cb, (void *) g_hWnd);
 
@@ -3194,9 +3293,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
         UpdateWindow(g_hWnd);
     }
 
-    while (GetMessageA(&msg, NULL, 0, 0)) {
+    while (GetMessageW(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
-        DispatchMessageA(&msg);
+        DispatchMessageW(&msg);
     }
 
     g_running = FALSE;

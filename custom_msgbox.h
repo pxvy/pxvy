@@ -49,7 +49,7 @@
 #define MB_BTN_HEIGHT    28   // 하단 액션 버튼 높이
 #define MB_BTN_MIN_W     72   // 최소 버튼 너비
 #define MB_FOOTER_H      48   // 하단 버튼 영역
-#define MB_TITLE        "ERROR"
+char MB_TITLE[1024] = {0};
 
 // ─── 버튼 ID (WinAPI 호환) ────────────────────────────────────────
 #ifndef IDOK
@@ -607,10 +607,11 @@ static LRESULT CALLBACK MbWndProc(HWND hWnd, UINT msg,
             if(cb) cb(IDCANCEL,ud);
             return 0;
         }
+        case VK_SPACE:
         case VK_RETURN:{
-            // 첫 번째 primary 버튼 실행
             MbCtx *ctx=(MbCtx*)GetWindowLongPtr(hWnd,0);
             if(ctx){
+                // primary 버튼 우선
                 for(int i=0;i<ctx->btn_count;i++){
                     if(ctx->btns[i].is_primary){
                         int id=ctx->btns[i].id;
@@ -619,6 +620,13 @@ static LRESULT CALLBACK MbWndProc(HWND hWnd, UINT msg,
                         if(cb) cb(id,ud);
                         return 0;
                     }
+                }
+                // primary 없으면 마지막 버튼 (MB_OK 등)
+                if(ctx->btn_count>0){
+                    int id=ctx->btns[ctx->btn_count-1].id;
+                    MbCallback cb=ctx->callback; void *ud=ctx->userdata;
+                    DestroyWindow(hWnd);
+                    if(cb) cb(id,ud);
                 }
             }
             return 0;
@@ -722,6 +730,8 @@ static void show_msgbox(HWND owner,
     ctx->owner=owner;       // 모달용 부모 창 저장
     strncpy_s(ctx->title,   sizeof(ctx->title),   title   ? title   : "", _TRUNCATE);
     strncpy_s(ctx->message, sizeof(ctx->message), message ? message : "", _TRUNCATE);
+
+    strncpy(MB_TITLE,title,strlen(title));
 
     // ── 동적 너비 계산 ──
     // 메시지 텍스트 너비 측정 (GDI, GL 컨텍스트 불필요)

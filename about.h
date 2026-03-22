@@ -413,12 +413,12 @@ static void ab_draw_layered(void) {
     for (int i = 0; i < W * H; i++) {
         DWORD c = bits[i];
         BYTE r = (c >> 16) & 0xFF;
-        BYTE g = (c >>  8) & 0xFF;
-        BYTE b =  c        & 0xFF;
-        bits[i] = ((DWORD) A            << 24)
-                | ((DWORD)(r * A / 255) << 16)
-                | ((DWORD)(g * A / 255) <<  8)
-                | ((DWORD)(b * A / 255));
+        BYTE g = (c >> 8) & 0xFF;
+        BYTE b = c & 0xFF;
+        bits[i] = ((DWORD) A << 24)
+                  | ((DWORD) (r * A / 255) << 16)
+                  | ((DWORD) (g * A / 255) << 8)
+                  | ((DWORD) (b * A / 255));
     }
 
     // ── 7. AA 모서리 ──
@@ -428,10 +428,23 @@ static void ab_draw_layered(void) {
             float fx = x + 0.5f, fy = y + 0.5f;
             float ccx = fr, ccy = fr;
             BOOL in = FALSE;
-            if      (fx < fr     && fy < fr    ) { ccx = fr;     ccy = fr;     in = TRUE; }
-            else if (fx > W - fr && fy < fr    ) { ccx = W - fr; ccy = fr;     in = TRUE; }
-            else if (fx < fr     && fy > H - fr) { ccx = fr;     ccy = H - fr; in = TRUE; }
-            else if (fx > W - fr && fy > H - fr) { ccx = W - fr; ccy = H - fr; in = TRUE; }
+            if (fx < fr && fy < fr) {
+                ccx = fr;
+                ccy = fr;
+                in = TRUE;
+            } else if (fx > W - fr && fy < fr) {
+                ccx = W - fr;
+                ccy = fr;
+                in = TRUE;
+            } else if (fx < fr && fy > H - fr) {
+                ccx = fr;
+                ccy = H - fr;
+                in = TRUE;
+            } else if (fx > W - fr && fy > H - fr) {
+                ccx = W - fr;
+                ccy = H - fr;
+                in = TRUE;
+            }
             if (!in) continue;
             float dx = fx - ccx, dy = fy - ccy;
             float edge = sqrtf(dx * dx + dy * dy) - fr;
@@ -441,10 +454,10 @@ static void ab_draw_layered(void) {
                 float t = (0.5f - edge) * (ABOUT_ALPHA / 255.0f);
                 DWORD c = bits[y * W + x];
                 bits[y * W + x] =
-                    ((DWORD)((BYTE)(((c >> 24) & 0xFF) * t + 0.5f)) << 24) |
-                    ((DWORD)((BYTE)(((c >> 16) & 0xFF) * t + 0.5f)) << 16) |
-                    ((DWORD)((BYTE)(((c >>  8) & 0xFF) * t + 0.5f)) <<  8) |
-                    ((DWORD)((BYTE)(( c        & 0xFF) * t + 0.5f)));
+                        ((DWORD) ((BYTE) (((c >> 24) & 0xFF) * t + 0.5f)) << 24) |
+                        ((DWORD) ((BYTE) (((c >> 16) & 0xFF) * t + 0.5f)) << 16) |
+                        ((DWORD) ((BYTE) (((c >> 8) & 0xFF) * t + 0.5f)) << 8) |
+                        ((DWORD) ((BYTE) ((c & 0xFF) * t + 0.5f)));
             }
         }
     }

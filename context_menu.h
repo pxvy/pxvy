@@ -15,21 +15,15 @@
 #define ID_PLAYLIST            902
 #define ID_RECENT_VIDEOS       907
 #define ID_THEME               903
-#define ID_TOOLS               904
+#define ID_SCREENSHOT               904
 #define ID_SETTINGS            905
 #define ID_ABOUT               906
 #define ID_RECENT_CLEAR  980
 // Tools 서브메뉴
-#define ID_TOOLS_SCREENSHOT    910
-#define ID_TOOLS_FRAME_CAP     911
-#define ID_TOOLS_EQUALIZER     912
-// Screenshot 서브메뉴
+#define ID_SCREENSHOT_CAPTURE    910
+#define ID_SCREENSHOT_FORMAT     911
 #define ID_SCREENSHOT_JPG      950
 #define ID_SCREENSHOT_PNG      951
-// JPG 품질 서브메뉴 (3단계 예시)
-#define ID_SCREENSHOT_JPG_HIGH 960
-#define ID_SCREENSHOT_JPG_MED  961
-#define ID_SCREENSHOT_JPG_LOW  962
 
 #define ID_RECENT_VIDEO_BASE  970   // 970 ~ 979
 
@@ -56,6 +50,8 @@
 
 #define SUBMENU(arr)  (arr), (int)(_countof(arr))
 static HWND g_root_menu_hwnd = NULL;
+static UINT g_selected_theme = ID_THEME_BLUE;
+static UINT g_selected_screenshot_format = ID_SCREENSHOT_JPG;
 
 // ──────────────────── 테마 색상 테이블 ────────────────────
 typedef struct {
@@ -82,7 +78,7 @@ static const int g_theme_color_count = (int) _countof(g_theme_colors);
 static void apply_theme(HWND hWnd, UINT id) {
     for (int i = 0; i < g_theme_color_count; i++) {
         if (g_theme_colors[i].id != id) continue;
-
+        g_selected_theme = id;
         // 전역 primary color 업데이트
         g_primary_color.r = g_theme_colors[i].r;
         g_primary_color.g = g_theme_colors[i].g;
@@ -103,7 +99,7 @@ static void apply_theme(HWND hWnd, UINT id) {
         if (g_about_hwnd && IsWindow(g_about_hwnd)) {
             ab_draw_layered();
         }
-        if (g_fp_hwnd!=NULL) {
+        if (g_fp_hwnd != NULL) {
             DwmSetWindowAttribute(g_fp_hwnd, 34, &border, sizeof(border));
             InvalidateRect(g_fp_hwnd, NULL, FALSE);
             UpdateWindow(g_fp_hwnd);
@@ -147,24 +143,16 @@ typedef struct {
 
 
 // ── 3단계: JPG 품질 ──
-static MenuItemData g_jpg_quality_items[] = {
-    {L"High (90%)", ID_SCREENSHOT_JPG_HIGH, FALSE, NULL, 0},
-    {L"Medium (70%)", ID_SCREENSHOT_JPG_MED, FALSE, NULL, 0},
-    {L"Low (50%)", ID_SCREENSHOT_JPG_LOW, FALSE, NULL, 0},
-};
-
-// ── 2단계: Screenshot 포맷 ──
 static MenuItemData g_screenshot_items[] = {
-    {L"JPEG", ID_SCREENSHOT_JPG, FALSE, SUBMENU(g_jpg_quality_items)},
+    {L"JPG", ID_SCREENSHOT_JPG, FALSE, NULL, 0},
     {L"PNG", ID_SCREENSHOT_PNG, FALSE, NULL, 0},
 };
 
-// ── 1단계: Tools ──
-static MenuItemData g_tools_submenu[] = {
-    {L"Screenshot", ID_TOOLS_SCREENSHOT, FALSE, SUBMENU(g_screenshot_items)},
-    {L"Frame Capture", ID_TOOLS_FRAME_CAP, FALSE, NULL, 0},
+// ── 2단계: Screenshot 포맷 ──
+static MenuItemData g_capture_submenu[] = {
+    {L"Capture Now\tCtrl+S", ID_SCREENSHOT_CAPTURE, FALSE, NULL, 0},
     {NULL, 0, TRUE, NULL, 0},
-    {L"Equalizer", ID_TOOLS_EQUALIZER, FALSE, NULL, 0},
+    {L"Capture Format", ID_SCREENSHOT_FORMAT, FALSE, SUBMENU(g_screenshot_items)},
 };
 
 static MenuItemData g_theme_submenu[] = {
@@ -188,7 +176,7 @@ static MenuItemData g_menu_items[] = {
     {NULL, 0, TRUE, NULL, 0},
     {L"Theme", ID_THEME, FALSE, SUBMENU(g_theme_submenu)},
     //{L"Playlist", ID_PLAYLIST, FALSE, NULL, 0},
-    //{L"Tools", ID_TOOLS, FALSE, SUBMENU(g_tools_submenu)},
+    {L"Capture", ID_SCREENSHOT, FALSE, SUBMENU(g_capture_submenu)},
     {L"Settings", ID_SETTINGS, FALSE, NULL, 0},
     {L"About", ID_ABOUT, FALSE, NULL, 0},
     {NULL, 0, TRUE, NULL, 0},
@@ -219,16 +207,16 @@ static void build_recent_submenu(void) {
 
             g_recent_submenu_items[i] = (MenuItemData){
                 g_recent_submenu_text[i],
-                (UINT)(ID_RECENT_VIDEO_BASE + i),
+                (UINT) (ID_RECENT_VIDEO_BASE + i),
                 FALSE, NULL, 0, 0
             };
         }
         // separator
         g_recent_submenu_items[g_recent_count] =
-            (MenuItemData){NULL, 0, TRUE, NULL, 0, 0};
+                (MenuItemData){NULL, 0, TRUE, NULL, 0, 0};
         // (Clear) 버튼
         g_recent_submenu_items[g_recent_count + 1] =
-            (MenuItemData){L"(Clear)", ID_RECENT_CLEAR, FALSE, NULL, 0, 0};
+                (MenuItemData){L"(Clear)", ID_RECENT_CLEAR, FALSE, NULL, 0, 0};
 
         g_recent_submenu_count = g_recent_count + 2;
     }
@@ -245,11 +233,11 @@ static void build_recent_submenu(void) {
 
         // ── 가장 긴 파일명 기준으로 너비 측정 ──
         for (int i = 0; i < g_recent_submenu_count; i++) {
-            if (!g_recent_submenu_items[i].text) continue;  // ← NULL 체크 추가
-            if (g_recent_submenu_items[i].separator) continue;  // ← separator 스킵
+            if (!g_recent_submenu_items[i].text) continue; // ← NULL 체크 추가
+            if (g_recent_submenu_items[i].separator) continue; // ← separator 스킵
             SIZE sz;
             GetTextExtentPoint32W(hdc, g_recent_submenu_items[i].text,
-                                  (int)wcslen(g_recent_submenu_items[i].text), &sz);
+                                  (int) wcslen(g_recent_submenu_items[i].text), &sz);
             int needed = sz.cx + 18 + 24;
             if (needed > dynamic_width) dynamic_width = needed;
         }
@@ -421,7 +409,19 @@ static void menu_draw_layered(HWND hWnd) {
                 DrawTextW(mem_dc, buf, -1, &textRc,
                           DT_SINGLELINE | DT_VCENTER | DT_LEFT);
             }
+            // ── 체크마크 ✔ ───────────────────────────────────
+            BOOL is_checked =
+                    (item->id != 0) &&
+                    (item->id == g_selected_theme ||
+                     item->id == g_selected_screenshot_format);
 
+            if (is_checked) {
+                SetTextColor(mem_dc,
+                             RGB(g_primary_color.r, g_primary_color.g, g_primary_color.b));
+                RECT ckRc = {w - 22, item_y, w - 4, item_y + MENU_ITEM_HEIGHT};
+                DrawTextW(mem_dc, L"\u2714", -1, &ckRc,
+                          DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+            }
             // 서브메뉴 화살표 ▶
             if (item->submenu && item->submenu_count > 0) {
                 SetTextColor(mem_dc, RGB(160, 160, 160));
@@ -647,9 +647,22 @@ static LRESULT CALLBACK MenuWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
                 } else {
                     HWND owner = ctx->owner;
                     UINT id = item->id;
+
+                    // ── 선택 상태 갱신 ──────────────────────────────
+                    if (id == ID_SCREENSHOT_JPG || id == ID_SCREENSHOT_PNG) {
+                        g_selected_screenshot_format = id;
+                        if (id == ID_SCREENSHOT_JPG) {
+                            pxvy_db_set_capture_type("JPG");
+                        } else if (id == ID_SCREENSHOT_PNG) {
+                            pxvy_db_set_capture_type("PNG");
+                        }
+                    }
+
+                    // ────────────────────────────────────────────────
+
                     close_all_menus();
                     if (id == ID_ABOUT) {
-                        show_about_window(owner); // About 창 직접 표시
+                        show_about_window(owner);
                     } else {
                         PostMessage(owner, WM_COMMAND, id, 0);
                     }
@@ -712,7 +725,7 @@ static void show_context_menu(HWND hWnd, int x, int y) {
     build_recent_submenu();
     register_menu_class(GetModuleHandle(NULL));
 
-    MenuCtx *ctx = (MenuCtx *) calloc(sizeof(MenuCtx),1);
+    MenuCtx *ctx = (MenuCtx *) calloc(sizeof(MenuCtx), 1);
     ctx->items = g_menu_items;
     ctx->count = g_menu_count;
     ctx->owner = hWnd;
