@@ -14,6 +14,10 @@ https://github.com/shinchiro/mpv-winbuild-cmake/releases
 
 ## Build
 
+```bash
+winget install upx
+```
+
 * [Python 3.13](https://www.python.org/downloads/release/python-31312/)
   * Meson: `pip install meson`
 * [MSYS2](https://www.msys2.org/)

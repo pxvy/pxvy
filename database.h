@@ -1,9 +1,6 @@
-//
-// Created by spring on 3/10/2026.
-//
 #pragma once
-#ifndef PXVY_DATABASE_H
-#define PXVY_DATABASE_H
+#ifndef RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_DATABASE_H
+#define RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_DATABASE_H
 #include<sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -294,4 +291,4 @@ static int pxvy_set_color(int r, int g, int b) {
 }
 
 
-#endif //PXVY_DATABASE_H
+#endif //RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_DATABASE_H

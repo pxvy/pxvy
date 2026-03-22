@@ -9,6 +9,8 @@
 #include "stb_image.h"
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize2.h"
+
+
 #include <Windows.h>
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
 #define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
@@ -1848,7 +1850,7 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
         }
 
         // 스플래시
-        if (g_aspect_ratio <= 0.0 && !g_in_sizemove) {
+        if (g_aspect_ratio <= 0.0) {
             // ← !g_in_sizemove 추가
             glViewport(0, 0, w, h);
             glDisable(GL_SCISSOR_TEST);
@@ -2194,6 +2196,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
 
     switch (msg) {
+        case WM_PAINT: {
+            // 비디오가 아닌 오디오나, 기본화면일때는 여기서 그리게
+        }break;
         case WM_SETTINGCHANGE: {
             if (lParam && lstrcmpiW((LPCWSTR) lParam, L"ImmersiveColorSet") == 0) {
                 CheckOSTheme();

@@ -22,8 +22,8 @@
 //               FONT_DEFAULT_FAMILY)
 //       stb_image.h, stb_image_resize2.h
 #pragma once
-#ifndef PXVY_CUSTOM_MSGBOX_H
-#define PXVY_CUSTOM_MSGBOX_H
+#ifndef RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_CUSTOM_MSGBOX_H
+#define RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_CUSTOM_MSGBOX_H
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -818,4 +818,4 @@ static void show_msgbox(HWND owner,
     SetFocus(g_mb_hwnd);
 }
 
-#endif // PXVY_CUSTOM_MSGBOX_H
+#endif // RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_CUSTOM_MSGBOX_H
