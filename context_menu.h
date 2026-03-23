@@ -9,21 +9,22 @@
 #include "font_picker.h"
 #include "about.h"
 #include "database.h"
+#include "defines.h"
 // ──────────────────── 메뉴 커맨드 ID ────────────────────
 #define ID_EXIT                900
 #define ID_OPEN                901
 #define ID_PLAYLIST            902
 #define ID_RECENT_VIDEOS       907
 #define ID_THEME               903
-#define ID_SCREENSHOT               904
+#define ID_SCREENSHOT          904
 #define ID_SETTINGS            905
 #define ID_ABOUT               906
-#define ID_RECENT_CLEAR  980
+#define ID_RECENT_CLEAR        980
 // Tools 서브메뉴
 #define ID_SCREENSHOT_CAPTURE    910
 #define ID_SCREENSHOT_FORMAT     911
-#define ID_SCREENSHOT_JPG      950
-#define ID_SCREENSHOT_PNG      951
+#define ID_SCREENSHOT_JPG        950
+#define ID_SCREENSHOT_PNG        951
 
 #define ID_RECENT_VIDEO_BASE  970   // 970 ~ 979
 

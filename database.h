@@ -56,37 +56,42 @@ static int pxvy_db_init(void) {
     }
 
     const char *sql =
-            // 1. ColorTable 
+            // 1. ColorTable
             "CREATE TABLE IF NOT EXISTS ColorTable ("
-            "  id    INTEGER PRIMARY KEY CHECK(id = 1),"
-            "  R     INTEGER NOT NULL CHECK(R BETWEEN 1 AND 255),"
-            "  G     INTEGER NOT NULL CHECK(G BETWEEN 1 AND 255),"
-            "  B     INTEGER NOT NULL CHECK(B BETWEEN 1 AND 255)"
+            "  id INTEGER PRIMARY KEY CHECK(id = 1),"
+            "  R  INTEGER NOT NULL CHECK(R BETWEEN 0 AND 255),"
+            "  G  INTEGER NOT NULL CHECK(G BETWEEN 0 AND 255),"
+            "  B  INTEGER NOT NULL CHECK(B BETWEEN 0 AND 255)"
             ");"
             "INSERT OR IGNORE INTO ColorTable(id, R, G, B) VALUES(1, 52, 199, 89);"
 
-            // 2. SubtitleFont 
+            // 2. SubtitleFont
             "CREATE TABLE IF NOT EXISTS SubtitleFont ("
             "  id       INTEGER PRIMARY KEY CHECK(id = 1),"
             "  FontName TEXT NOT NULL"
             ");"
             "INSERT OR IGNORE INTO SubtitleFont(id, FontName) VALUES(1, 'Segoe UI');"
 
-            // 3. CapturePath 
+            // 3. CapturePath
             "CREATE TABLE IF NOT EXISTS CapturePath ("
             "  id   INTEGER PRIMARY KEY CHECK(id = 1),"
             "  Path TEXT NOT NULL"
             ");"
+
             // 4. CaptureFormat
             "CREATE TABLE IF NOT EXISTS CaptureFormat ("
-            "  id   INTEGER PRIMARY KEY CHECK(id = 1),"
+            "  id     INTEGER PRIMARY KEY CHECK(id = 1),"
             "  Format TEXT NOT NULL"
             ");"
+            "INSERT OR IGNORE INTO CaptureFormat(id, Format) VALUES(1, 'PNG');" // ← 여기로 이동
+
             // 5. PlayerVolume
             "CREATE TABLE IF NOT EXISTS PlayerVolume ("
-            "  id   INTEGER PRIMARY KEY CHECK(id = 1),"
+            "  id     INTEGER PRIMARY KEY CHECK(id = 1),"
             "  Volume REAL NOT NULL"
             ");"
+            "INSERT OR IGNORE INTO PlayerVolume(id, Volume) VALUES(1, 100.0);" // ← 여기로 이동
+
             // 6. RecentVideos
             "CREATE TABLE IF NOT EXISTS RecentVideos ("
             "  idx      INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -101,28 +106,23 @@ static int pxvy_db_init(void) {
         return -1;
     }
 
-    // CapturePath 기본값
+    // CapturePath 기본값만 별도 처리 (바인딩 필요하므로 불가피)
     const char *profile = getenv("USERPROFILE");
     char default_cap[MAX_PATH];
     snprintf(default_cap, MAX_PATH, "%s\\Pictures\\PXVYScreenShots",
              profile ? profile : ".");
 
     sqlite3_stmt *stmt;
+    int rc;
 
-    sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO CapturePath(id, Path) VALUES(1, ?);", -1, &stmt, NULL);
-    sqlite3_bind_text(stmt, 1, default_cap, -1, SQLITE_STATIC);
-    sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
-    // CaptureFormat 기본값: PNG
-    sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO CaptureFormat(id, Format) VALUES(1, 'PNG');", -1, &stmt, NULL);
-    sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
-    // PlayerVolume 기본값: 1.0
-    sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO PlayerVolume(id, Volume) VALUES(1, 1.0);", -1, &stmt, NULL);
-    sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
+    rc = sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO CapturePath(id, Path) VALUES(1, ?);", -1, &stmt, NULL);
+    if (rc == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, default_cap, -1, SQLITE_STATIC);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    } else {
+        say("DB CapturePath prepare failed: %s\n", sqlite3_errmsg(db));
+    }
 
     sqlite3_close(db);
     return 0;
@@ -305,14 +305,14 @@ static int pxvy_add_recent_video(const char *file_path) {
     int rc = -1;
 
     // 중복이면 삭제 후 재삽입 → idx가 새로 발급되어 최신 순위로 올라옴 
-    const char *del_sql = "DELETE FROM RecentVideos WHERE FilePath = ?;";
+    const char *del_sql = "DELETE FROM RecentVideos WHERE FilePath = ?; ";
     if (sqlite3_prepare_v2(db, del_sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, file_path, -1, SQLITE_STATIC);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
 
-    const char *ins_sql = "INSERT INTO RecentVideos(FilePath) VALUES(?);";
+    const char *ins_sql = "INSERT INTO RecentVideos(FilePath) VALUES(?); ";
     if (sqlite3_prepare_v2(db, ins_sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, file_path, -1, SQLITE_STATIC);
         rc = (sqlite3_step(stmt) == SQLITE_DONE) ? 0 : -1;
@@ -322,7 +322,7 @@ static int pxvy_add_recent_video(const char *file_path) {
     // 10개 초과분(오래된 것) 제거 
     const char *trim_sql =
             "DELETE FROM RecentVideos WHERE idx NOT IN"
-            "  (SELECT idx FROM RecentVideos ORDER BY idx DESC LIMIT 10);";
+            "  (SELECT idx FROM RecentVideos ORDER BY idx DESC LIMIT 10); ";
     sqlite3_exec(db, trim_sql, NULL, NULL, NULL);
 
     sqlite3_close(db);
@@ -387,8 +387,8 @@ static int pxvy_set_subtitle_font(const char *font_name) {
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
 
     const char *sql =
-            "INSERT INTO SubtitleFont(id, FontName) VALUES(1, ?)"
-            " ON CONFLICT(id) DO UPDATE SET FontName = excluded.FontName;";
+            "INSERT INTO SubtitleFont(id, FontName) VALUES(1, ?) "
+            " ON CONFLICT(id) DO UPDATE SET FontName = excluded.FontName; ";
 
     sqlite3_stmt *stmt;
     int rc = -1;
@@ -464,8 +464,8 @@ static int pxvy_set_color(int r, int g, int b) {
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
 
     const char *sql =
-            "INSERT INTO ColorTable(id, R, G, B) VALUES(1, ?, ?, ?)"
-            "ON CONFLICT(id) DO UPDATE SET"
+            "INSERT INTO ColorTable(id, R, G, B) VALUES(1, ?, ?, ?) "  // ← 끝에 공백
+            "ON CONFLICT(id) DO UPDATE SET "                            // ← 끝에 공백
             "  R = excluded.R,"
             "  G = excluded.G,"
             "  B = excluded.B;";
@@ -477,7 +477,10 @@ static int pxvy_set_color(int r, int g, int b) {
         sqlite3_bind_int(stmt, 2, g);
         sqlite3_bind_int(stmt, 3, b);
         rc = (sqlite3_step(stmt) == SQLITE_DONE) ? 0 : -1;
+        if (rc != 0) say("pxvy_set_color step failed: %s\n", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
+    } else {
+        say("pxvy_set_color prepare failed: %s\n", sqlite3_errmsg(db));
     }
 
     sqlite3_close(db);

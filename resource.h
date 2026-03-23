@@ -9,6 +9,7 @@
 #define IDR_FONT_POPPINS            200
 #define IDR_FONT_ROBOTO             201
 #define IDR_FONT_D2CODING           202
+#define IDR_FONT_NOTOSANS           203
+#define IDR_FONT_CASCADIACODE       204
 
-#define IDR_FONT_NOTOSANS           301
 #endif //RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_RESOURCES_H

@@ -1,5 +1,4 @@
 //#include <mimalloc.h>
-
 // malloc / free / calloc / realloc 전역 교체
 // void *malloc(size_t n)              { return mi_malloc(n); }
 // void *calloc(size_t n, size_t sz)   { return mi_calloc(n, sz); }
@@ -53,11 +52,9 @@ static const IID MY_IID_IAudioEndpointVolume = {
     0x5CDF2C82, 0x841E, 0x4546, {0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A}
 };
 
-// 링크: -lole32 -loleaut32
-// 또는 #pragma comment(lib, "ole32.lib")
 
-// 현재 시스템 볼륨 가져오기 (0.0 ~ 1.0), 실패 시 -1.f 반환
 static float GetSystemVolume(void) {
+    // 현재 시스템 볼륨 가져오기 (0.0 ~ 1.0), 실패 시 -1.f 반환
     float vol = -1.f;
     IMMDeviceEnumerator *pEnum = NULL;
     IMMDevice *pDev = NULL;
@@ -102,10 +99,10 @@ cleanup:
 }
 
 
-#define HT_AOT_BUTTON  101
+#define HT_AOT_BUTTON  1201
 
-#define ATIME_MOUSECHECK    100
-#define ASIZE_MOUSEIDLE 30
+#define ATIME_MOUSECHECK    1301
+#define ASIZE_MOUSEIDLE     1302
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -116,25 +113,23 @@ cleanup:
 #define PXVY_CMD_OPEN  1UL
 // ──────────────────── 상수 ────────────────────
 
-#define CAPTION_HEIGHT   32
-#define CAPTION_BTN_W    46
-#define RESIZE_BORDER     6
-
-#define CTRL_PANEL_H     90
-#define CTRL_PANEL_MARGIN 25
-#define CTRL_CORNER_R    12.0f
-
-#define CTRL_NONE         0
-#define CTRL_PLAY         1
-#define CTRL_REW          2
-#define CTRL_FWD          3
-#define CTRL_SEEK         4
-#define CTRL_VOL_SLIDER   5
-#define CTRL_VOL_ICON     6
-#define CTRL_REPEAT       7
-#define CTRL_SETTINGS     8
-#define CTRL_SUBTITLE     9
-#define CTRL_SPEED        10
+#define CAPTION_HEIGHT      32
+#define CAPTION_BTN_W       46
+#define RESIZE_BORDER       6
+#define CTRL_PANEL_H        90
+#define CTRL_PANEL_MARGIN   25
+#define CTRL_CORNER_R       12.0f
+#define CTRL_NONE           0
+#define CTRL_PLAY           1
+#define CTRL_REW            2
+#define CTRL_FWD            3
+#define CTRL_SEEK           4
+#define CTRL_VOL_SLIDER     5
+#define CTRL_VOL_ICON       6
+#define CTRL_REPEAT         7
+#define CTRL_SETTINGS       8
+#define CTRL_SUBTITLE       9
+#define CTRL_SPEED          10
 
 #define WM_MPV_EVENT        (WM_USER + 1)
 #define WM_VIDEO_RESIZE     (WM_USER + 2)
@@ -241,9 +236,9 @@ static HBRUSH g_bg_brush = NULL;
 #define OS_THEME_FG os_theme.foreground.r,os_theme.foreground.g,os_theme.foreground.b
 #define OS_THEME_PC g_primary_color.r,g_primary_color.g,g_primary_color.b
 
-#define RGB_THEME_BK    RGB(os_theme.background.r,os_theme.background.g,os_theme.background.b)
-#define RGB_THEME_FG    RGB(os_theme.foreground.r,os_theme.foreground.g,os_theme.foreground.b)
-#define RGB_THEME_PRIMRY RGB(g_primary_color.r, g_primary_color.g, g_primary_color.b);
+#define RGB_THEME_BK        RGB(os_theme.background.r,os_theme.background.g,os_theme.background.b)
+#define RGB_THEME_FG        RGB(os_theme.foreground.r,os_theme.foreground.g,os_theme.foreground.b)
+#define RGB_THEME_PRIMRY    RGB(g_primary_color.r, g_primary_color.g, g_primary_color.b);
 
 static GLuint g_logo_tex = 0;
 static int g_logo_w = 0;
@@ -251,31 +246,63 @@ static int g_logo_h = 0;
 static GLuint g_splash_tex = 0;
 static int g_splash_w = 0;
 static int g_splash_h = 0;
-
 // ──────────────────── 폰트 리소스 핸들 ────────────────────
-// [변경] RC에서 로드한 폰트 핸들 전역 보관
 static HANDLE g_font_handle_notosans = NULL;
 static HANDLE g_font_handle_poppins = NULL;
 static HANDLE g_font_handle_roboto = NULL;
 static HANDLE g_font_handle_d2coding = NULL;
-// 단일 폰트 리소스 로드 헬퍼
+static HANDLE g_font_handle_cascadiacode = NULL;  // ← 추가
+
 static HANDLE load_font_resource(HINSTANCE hInst, int res_id) {
-    HRSRC hRes = FindResourceA(hInst, MAKEINTRESOURCE(res_id), RT_FONT);
-    if (!hRes) return NULL;
+    HRSRC hRes = FindResourceA(hInst, MAKEINTRESOURCE(res_id), RT_RCDATA);
+    if (!hRes) { say("load_font_resource: FindResource failed, id=%d", res_id); return NULL; }
     HGLOBAL hGlob = LoadResource(hInst, hRes);
-    if (!hGlob) return NULL;
+    if (!hGlob) { say("load_font_resource: LoadResource failed"); return NULL; }
     void *pData = LockResource(hGlob);
     DWORD size = SizeofResource(hInst, hRes);
-    if (!pData || size == 0) return NULL;
+    if (!pData || size == 0) { say("load_font_resource: size=0"); return NULL; }
     DWORD nFonts = 0;
-    return AddFontMemResourceEx(pData, size, NULL, &nFonts);
+    HANDLE h = AddFontMemResourceEx(pData, size, NULL, &nFonts);
+    say("load_font_resource: id=%d nFonts=%lu handle=%p", res_id, nFonts, h);
+    return h;
+}
+
+static int CALLBACK enum_font_cb(const LOGFONTA *lf, const TEXTMETRICA *tm,
+                                  DWORD type, LPARAM lParam) {
+    say("  font: [%s]", lf->lfFaceName);  // ← 중복 제거, D2 필터 제거
+    return 1;
+}
+
+static void debug_list_fonts(void) {
+    HDC hdc = GetDC(NULL);
+    LOGFONTA lf = {0};
+    lf.lfCharSet = DEFAULT_CHARSET;
+
+    strcpy(lf.lfFaceName, "Roboto");
+    say("=== Roboto ===");
+    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+
+    strcpy(lf.lfFaceName, "D2Coding");  // ← "Consolas" → "D2Coding"
+    say("=== D2Coding ===");
+    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+
+    strcpy(lf.lfFaceName, "Noto Sans KR");
+    say("=== Noto Sans KR ===");
+    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+
+    strcpy(lf.lfFaceName, "Cascadia Code NF");  // ← 추가 (face name은 로그 보고 수정)
+    say("=== CascadiaCode ===");
+    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+
+    ReleaseDC(NULL, hdc);
 }
 
 static void load_fonts_from_resource(HINSTANCE hInst) {
-    g_font_handle_notosans = load_font_resource(hInst, IDR_FONT_NOTOSANS);
-    g_font_handle_poppins = load_font_resource(hInst, IDR_FONT_POPPINS);
-    g_font_handle_roboto = load_font_resource(hInst, IDR_FONT_ROBOTO);
-    g_font_handle_d2coding = load_font_resource(hInst, IDR_FONT_D2CODING);
+    g_font_handle_notosans     = load_font_resource(hInst, IDR_FONT_NOTOSANS);
+    g_font_handle_poppins      = load_font_resource(hInst, IDR_FONT_POPPINS);
+    g_font_handle_roboto       = load_font_resource(hInst, IDR_FONT_ROBOTO);
+    g_font_handle_d2coding     = load_font_resource(hInst, IDR_FONT_D2CODING);
+    g_font_handle_cascadiacode = load_font_resource(hInst, IDR_FONT_CASCADIACODE);  // ← 추가
 }
 
 #define UNLOAD_FONT(VAL) if(VAL){RemoveFontMemResourceEx(VAL);VAL=NULL;}
@@ -285,6 +312,7 @@ static void unload_fonts_from_resource(void) {
     UNLOAD_FONT(g_font_handle_poppins);
     UNLOAD_FONT(g_font_handle_roboto);
     UNLOAD_FONT(g_font_handle_d2coding);
+    UNLOAD_FONT(g_font_handle_cascadiacode);
 }
 
 // ███████╗░█████╗░███╗░░██╗████████╗░░░░░░██████╗░██╗░█████╗░██╗░░██╗███████╗██████╗░
@@ -322,7 +350,8 @@ void CheckOSTheme(void) {
         }
         RegCloseKey(hKey);
     }
-
+    // 다크모드만 지원(현재)
+    is_dark_mode = TRUE;
     if (is_dark_mode) {
         os_theme.background.r = 34;
         os_theme.background.g = 37;
@@ -852,7 +881,7 @@ static void init_font(HDC hdc) {
         CLIP_DEFAULT_PRECIS,
         ANTIALIASED_QUALITY,
         DEFAULT_PITCH | FF_SWISS,
-        FONT_DEFAULT_FAMILY); // [변경] "Segoe UI" → "Poppins"
+        FONT_DEFAULT_FAMILY);
     HFONT old = (HFONT) SelectObject(hdc, hFont);
     wglUseFontOutlinesA(hdc, 0, 128, g_font_base, 0.0f, 0.0f,
                         WGL_FONT_POLYGONS, g_glyph_metrics);
@@ -881,17 +910,6 @@ static void init_mono_font(HDC hdc) {
                         WGL_FONT_POLYGONS, g_mono_glyph_metrics);
     SelectObject(hdc, old);
     DeleteObject(hFont);
-}
-
-static void gl_draw_string_mono(float x, float y, const char *str) {
-    glPushMatrix();
-    glTranslatef(x, y, 0.0f);
-    glScalef((float) g_mono_font_height, -(float) g_mono_font_height, 1.0f);
-    glPushAttrib(GL_LIST_BIT);
-    glListBase(g_mono_font_base);
-    glCallLists((GLsizei) strlen(str), GL_UNSIGNED_BYTE, str);
-    glPopAttrib();
-    glPopMatrix();
 }
 
 static void gl_info_rebuild_cache(
@@ -971,10 +989,10 @@ static void gl_info_rebuild_cache(
 }
 
 static void load_logo_texture(int rc_id, int target_w, int target_h) {
-    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(rc_id), RT_RCDATA);
-    HGLOBAL hGlob = hRes  ? LoadResource(NULL, hRes)   : NULL;
-    void   *pData = hGlob ? LockResource(hGlob)        : NULL;
-    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+    HRSRC hRes = FindResourceA(NULL, MAKEINTRESOURCEA(rc_id), RT_RCDATA);
+    HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
+    void *pData = hGlob ? LockResource(hGlob) : NULL;
+    DWORD nSize = hRes ? SizeofResource(NULL, hRes) : 0;
 
     if (!pData || nSize == 0) {
         MessageBoxA(NULL, "Error loading logo texture", "Error", MB_OK);
@@ -983,17 +1001,21 @@ static void load_logo_texture(int rc_id, int target_w, int target_h) {
 
     int src_w, src_h, ch;
     unsigned char *src = stbi_load_from_memory(
-        (const stbi_uc *)pData, (int)nSize, &src_w, &src_h, &ch, 4);
+        (const stbi_uc *) pData, (int) nSize, &src_w, &src_h, &ch, 4);
     if (!src) {
         MessageBoxA(NULL, "Error loading logo texture", "Error", MB_OK);
         exit(EXIT_FAILURE);
     }
 
-    unsigned char *dst = (unsigned char *)malloc(target_w * target_h * 4);
-    if (!dst) { stbi_image_free(src); return; }
+    unsigned char *dst = (unsigned char *) malloc(target_w * target_h * 4);
+    if (!dst) {
+        stbi_image_free(src);
+        return;
+    }
+
 
     stbir_resize_uint8_linear(src, src_w, src_h, 0,
-                               dst, target_w, target_h, 0, STBIR_RGBA);
+                              dst, target_w, target_h, 0, STBIR_RGBA);
     stbi_image_free(src);
 
     if (g_logo_tex) glDeleteTextures(1, &g_logo_tex);
@@ -1009,6 +1031,7 @@ static void load_logo_texture(int rc_id, int target_w, int target_h) {
     g_logo_w = target_w;
     g_logo_h = target_h;
 }
+
 static float gl_measure_string(const char *str) {
     float w = 0.0f;
     for (const char *p = str; *p; p++) {
@@ -2130,12 +2153,14 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
                 gl_draw_string(fx + 1.0f, fy + 1.0f, fps_buf);
                 glColor4f_255(OS_THEME_FG, 0.95f);
                 gl_draw_string(fx, fy, fps_buf);
+                gl_draw_string(fx, fy, fps_buf);
 
                 float fy_cpu = fy + line_h;
                 float fx_cpu = (float) w - margin - gl_measure_string(cpu_buf);
                 glColor4f(0, 0, 0, 0.7f);
                 gl_draw_string(fx_cpu + 1.0f, fy_cpu + 1.0f, cpu_buf);
                 glColor4f_255(OS_THEME_FG, 0.95f);
+                gl_draw_string(fx_cpu, fy_cpu, cpu_buf);
                 gl_draw_string(fx_cpu, fy_cpu, cpu_buf);
 
                 glDisable(GL_POLYGON_SMOOTH);
@@ -2865,11 +2890,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 break;
                 case VK_CONTROL: g_ctrl_down = TRUE;
                     break;
-                case VK_TAB: g_show_info = !g_show_info;
+                case VK_TAB: {
+                    g_show_info = !g_show_info;
+                }
                     break;
-                case 'H': g_hide_element = TRUE;
+                case 'H': {
+                    g_hide_element = TRUE;
                     SetCursor(NULL);
-                    break;
+                }
+                break;
                 case 'O':
                     if (g_ctrl_down) {
                         char p[MAX_PATH * 3];
@@ -2881,8 +2910,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                     break;
                 case 'Q': {
-                    if (g_ctrl_down) PostMessageA(hWnd, WM_CLOSE, 0, 0);
+                    if (g_ctrl_down) {
+                        PostMessageA(hWnd, WM_CLOSE, 0, 0);
+                    }
                 }
+                break;
                 case 'S': {
                     if (g_ctrl_down) {
                         if (g_is_playing) {
@@ -3145,8 +3177,12 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     say("WINMAIN: %d, %d, %d", g_primary_color.r, g_primary_color.g, g_primary_color.b);
 
     g_volume = pxvy_db_get_volume();
+    say("Volume: %f", g_volume);
+
     // [변경] ① 폰트 리소스 로드 (init_font 전에 반드시 호출)
     load_fonts_from_resource(inst);
+    debug_list_fonts();
+
 
     WNDCLASSW wc = {0};
     wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -3181,7 +3217,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     }
     wglMakeCurrent(g_hDC, g_hRC);
 
-    // [변경] ② Poppins가 등록된 상태에서 폰트 초기화
+    // [변경] ② Roboto가 등록된 상태에서 폰트 초기화
     init_font(g_hDC);
     init_mono_font(g_hDC);
 
@@ -3193,38 +3229,38 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     load_logo_texture(IDR_LOGO_SYMBOL, 20, 20);
 
     if (!g_splash_tex) {
-    // ── 리소스에서 BMP 로드 ──────────────────────────────
-    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_PNG), RT_RCDATA);
-    HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
-    void   *pData = hGlob ? LockResource(hGlob) : NULL;
-    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+        // ── 리소스에서 BMP 로드 ──────────────────────────────
+        HRSRC hRes = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_PNG), RT_RCDATA);
+        HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
+        void *pData = hGlob ? LockResource(hGlob) : NULL;
+        DWORD nSize = hRes ? SizeofResource(NULL, hRes) : 0;
 
-    if (pData && nSize) {
-        int sw, sh, ch;
-        unsigned char *src = stbi_load_from_memory(
-            (const stbi_uc *)pData, (int)nSize, &sw, &sh, &ch, 4);
+        if (pData && nSize) {
+            int sw, sh, ch;
+            unsigned char *src = stbi_load_from_memory(
+                (const stbi_uc *) pData, (int) nSize, &sw, &sh, &ch, 4);
 
-        if (src) {
-            unsigned char *dst = (unsigned char *)malloc(360 * 360 * 4);
-            if (dst) {
-                stbir_resize_uint8_linear(src, sw, sh, 0,
-                                          dst, 360, 360, 0, STBIR_RGBA);
-                glGenTextures(1, &g_splash_tex);
-                glBindTexture(GL_TEXTURE_2D, g_splash_tex);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 360, 360, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, dst);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glBindTexture(GL_TEXTURE_2D, 0);
-                g_splash_w = 360;
-                g_splash_h = 360;
-                free(dst);
+            if (src) {
+                unsigned char *dst = (unsigned char *) malloc(360 * 360 * 4);
+                if (dst) {
+                    stbir_resize_uint8_linear(src, sw, sh, 0,
+                                              dst, 360, 360, 0, STBIR_RGBA);
+                    glGenTextures(1, &g_splash_tex);
+                    glBindTexture(GL_TEXTURE_2D, g_splash_tex);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 360, 360, 0,
+                                 GL_RGBA, GL_UNSIGNED_BYTE, dst);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    g_splash_w = 360;
+                    g_splash_h = 360;
+                    free(dst);
+                }
+                stbi_image_free(src);
             }
-            stbi_image_free(src);
+            // LockResource/LoadResource는 FreeResource 불필요 (Windows 32+)
         }
-        // LockResource/LoadResource는 FreeResource 불필요 (Windows 32+)
     }
-}
 
     mpv = mpv_create();
     if (!mpv) {

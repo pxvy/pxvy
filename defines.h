@@ -57,10 +57,8 @@ SELECT_ANY void say(const char *format, ...) {
 // ██║░░░░░╚█████╔╝██║░╚███║░░░██║░░░██████╔╝
 // ╚═╝░░░░░░╚════╝░╚═╝░░╚══╝░░░╚═╝░░░╚═════╝░
 #define FONT_DEFAULT_FAMILY "Roboto"
-#define FONT_MONOSPACE_FAMILY "D2Coding"
+#define FONT_MONOSPACE_FAMILY "Cascadia Code NF"
 #define FONT_SUBTITLE_FAMILY "Noto Sans KR"
-//#define FONT_SUBTITLE_FAMILY "NanumGothic"
-//#define FONT_SUBTITLE_FAMILY "나눔스퀘어라운드"
 
 
 #endif
