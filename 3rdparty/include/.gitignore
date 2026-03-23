@@ -1,5 +1,5 @@
-MediaInfo/
-MediaInfoDLL/
-mov/
-ZenLib/
 *.h
+MediaInfoDLL/
+MediaInfo/
+mpv/
+ZenLib/

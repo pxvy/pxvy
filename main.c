@@ -251,58 +251,67 @@ static HANDLE g_font_handle_notosans = NULL;
 static HANDLE g_font_handle_poppins = NULL;
 static HANDLE g_font_handle_roboto = NULL;
 static HANDLE g_font_handle_d2coding = NULL;
-static HANDLE g_font_handle_cascadiacode = NULL;  // ← 추가
+static HANDLE g_font_handle_cascadiacode = NULL; // ← 추가
 
 static HANDLE load_font_resource(HINSTANCE hInst, int res_id) {
     HRSRC hRes = FindResourceA(hInst, MAKEINTRESOURCE(res_id), RT_RCDATA);
-    if (!hRes) { say("load_font_resource: FindResource failed, id=%d", res_id); return NULL; }
+    if (!hRes) {
+        say("load_font_resource: FindResource failed, id=%d", res_id);
+        return NULL;
+    }
     HGLOBAL hGlob = LoadResource(hInst, hRes);
-    if (!hGlob) { say("load_font_resource: LoadResource failed"); return NULL; }
+    if (!hGlob) {
+        say("load_font_resource: LoadResource failed");
+        return NULL;
+    }
     void *pData = LockResource(hGlob);
     DWORD size = SizeofResource(hInst, hRes);
-    if (!pData || size == 0) { say("load_font_resource: size=0"); return NULL; }
+    if (!pData || size == 0) {
+        say("load_font_resource: size=0");
+        return NULL;
+    }
     DWORD nFonts = 0;
     HANDLE h = AddFontMemResourceEx(pData, size, NULL, &nFonts);
     say("load_font_resource: id=%d nFonts=%lu handle=%p", res_id, nFonts, h);
     return h;
 }
 
-static int CALLBACK enum_font_cb(const LOGFONTA *lf, const TEXTMETRICA *tm,
-                                  DWORD type, LPARAM lParam) {
-    say("  font: [%s]", lf->lfFaceName);  // ← 중복 제거, D2 필터 제거
-    return 1;
-}
-
-static void debug_list_fonts(void) {
-    HDC hdc = GetDC(NULL);
-    LOGFONTA lf = {0};
-    lf.lfCharSet = DEFAULT_CHARSET;
-
-    strcpy(lf.lfFaceName, "Roboto");
-    say("=== Roboto ===");
-    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
-
-    strcpy(lf.lfFaceName, "D2Coding");  // ← "Consolas" → "D2Coding"
-    say("=== D2Coding ===");
-    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
-
-    strcpy(lf.lfFaceName, "Noto Sans KR");
-    say("=== Noto Sans KR ===");
-    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
-
-    strcpy(lf.lfFaceName, "Cascadia Code NF");  // ← 추가 (face name은 로그 보고 수정)
-    say("=== CascadiaCode ===");
-    EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
-
-    ReleaseDC(NULL, hdc);
-}
+// static int CALLBACK enum_font_cb(const LOGFONTA *lf, const TEXTMETRICA *tm,
+//                                  DWORD type, LPARAM lParam) {
+//     say("  font: [%s]", lf->lfFaceName); // ← 중복 제거, D2 필터 제거
+//     return 1;
+// }
+//
+// static void debug_list_fonts(void) {
+//     HDC hdc = GetDC(NULL);
+//     LOGFONTA lf = {0};
+//     lf.lfCharSet = DEFAULT_CHARSET;
+//
+//     strcpy(lf.lfFaceName, "Roboto");
+//     say("=== Roboto ===");
+//     EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+//
+//     strcpy(lf.lfFaceName, "D2Coding"); // ← "Consolas" → "D2Coding"
+//     say("=== D2Coding ===");
+//     EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+//
+//     strcpy(lf.lfFaceName, "Noto Sans KR");
+//     say("=== Noto Sans KR ===");
+//     EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+//
+//     strcpy(lf.lfFaceName, "Cascadia Code NF"); // ← 추가 (face name은 로그 보고 수정)
+//     say("=== CascadiaCode ===");
+//     EnumFontFamiliesExA(hdc, &lf, enum_font_cb, 0, 0);
+//
+//     ReleaseDC(NULL, hdc);
+// }
 
 static void load_fonts_from_resource(HINSTANCE hInst) {
-    g_font_handle_notosans     = load_font_resource(hInst, IDR_FONT_NOTOSANS);
-    g_font_handle_poppins      = load_font_resource(hInst, IDR_FONT_POPPINS);
-    g_font_handle_roboto       = load_font_resource(hInst, IDR_FONT_ROBOTO);
-    g_font_handle_d2coding     = load_font_resource(hInst, IDR_FONT_D2CODING);
-    g_font_handle_cascadiacode = load_font_resource(hInst, IDR_FONT_CASCADIACODE);  // ← 추가
+    g_font_handle_notosans = load_font_resource(hInst, IDR_FONT_NOTOSANS);
+    g_font_handle_poppins = load_font_resource(hInst, IDR_FONT_POPPINS);
+    g_font_handle_roboto = load_font_resource(hInst, IDR_FONT_ROBOTO);
+    g_font_handle_d2coding = load_font_resource(hInst, IDR_FONT_D2CODING);
+    g_font_handle_cascadiacode = load_font_resource(hInst, IDR_FONT_CASCADIACODE); // ← 추가
 }
 
 #define UNLOAD_FONT(VAL) if(VAL){RemoveFontMemResourceEx(VAL);VAL=NULL;}
@@ -2893,7 +2902,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 case VK_TAB: {
                     g_show_info = !g_show_info;
                 }
-                    break;
+                break;
                 case 'H': {
                     g_hide_element = TRUE;
                     SetCursor(NULL);
@@ -3181,7 +3190,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
 
     // [변경] ① 폰트 리소스 로드 (init_font 전에 반드시 호출)
     load_fonts_from_resource(inst);
-    debug_list_fonts();
+    //debug_list_fonts();
 
 
     WNDCLASSW wc = {0};

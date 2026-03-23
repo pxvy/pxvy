@@ -25,8 +25,9 @@ elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
             -fomit-frame-pointer -fvectorize -fslp-vectorize -fno-finite-math-only
             -fstrict-aliasing -finline-functions)
 elseif (MSVC)
-    set(COMPILE_OPTIONS /O2 /W1 /GL /Ot /fp:fast /arch:AVX2 /GR- /std:c17)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
+    message(FATAL_ERROR "MSVC is not supported. Please use MinGW, clang.")
+    # set(COMPILE_OPTIONS /O2 /W1 /GL /Ot /fp:fast /arch:AVX2 /GR- /std:c17)
+    # set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
 endif ()
 
 

@@ -52,7 +52,6 @@ def smi_to_srt(smi_path, srt_path):
             f.write(f"{text}\n\n")
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="pytools")
     parser.add_argument("-s", "--smitosrt", required=True, help="SMI to SRT")

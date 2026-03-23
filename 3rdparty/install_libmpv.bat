@@ -1,4 +1,8 @@
 @echo off
+
+chcp 65001 >nul
+powershell -Command "Write-Host '██╗░░░░░██╗██████╗░███╗░░░███╗██████╗░██╗░░░██╗' -ForegroundColor Cyan;Write-Host '██║░░░░░██║██╔══██╗████╗░████║██╔══██╗██║░░░██║' -ForegroundColor Cyan;Write-Host '██║░░░░░██║██████╦╝██╔████╔██║██████╔╝╚██╗░██╔╝' -ForegroundColor Cyan;Write-Host '██║░░░░░██║██╔══██╗██║╚██╔╝██║██╔═══╝░░╚████╔╝░' -ForegroundColor Cyan;Write-Host '███████╗██║██████╦╝██║░╚═╝░██║██║░░░░░░░╚██╔╝░░' -ForegroundColor Cyan;Write-Host '╚══════╝╚═╝╚═════╝░╚═╝░░░░░╚═╝╚═╝░░░░░░░░╚═╝░░░' -ForegroundColor Cyan;"
+
 setlocal
 
 set "URL=https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260307/mpv-dev-x86_64-v3-20260307-git-f9190e5.7z"
@@ -10,7 +14,7 @@ if not exist "lib" mkdir "lib"
 if not exist "bin" mkdir "bin"
 
 echo [+] mpv Downloading...
-powershell -Command "Invoke-WebRequest -Uri '%URL%' -OutFile '%ARCHIVE_FILE%'"
+curl -L "%URL%" -o "%ARCHIVE_FILE%"
 
 echo [+] Decompressing...
 if exist "%EXTRACT_DIR%" rd /s /q "%EXTRACT_DIR%"
@@ -19,11 +23,8 @@ if exist "%EXTRACT_DIR%" rd /s /q "%EXTRACT_DIR%"
 echo [+] Move...
 pushd "%EXTRACT_DIR%"
 
-for /r %%f in (mpv_client_api.h) do (
-    if exist "%%~dpf..\libmpv.dll.a" (
-        if exist "..\include\mpv" rd /s /q "..\include\mpv"
-        move "%%~dpf.." "..\include\"
-    )
+if exist "include" (
+    xcopy "include" "..\include\" /E /I /Y
 )
 
 for /r %%f in (libmpv.dll.a) do move /y "%%f" "..\lib\"
@@ -32,8 +33,10 @@ for /r %%f in (libmpv-2.dll) do move /y "%%f" "..\bin\"
 popd
 
 echo [+] Cleanup...
-del /q "%ARCHIVE_FILE%"
-rd /s /q "%EXTRACT_DIR%"
+if exist "%ARCHIVE_FILE%" del /q "%ARCHIVE_FILE%"
+if exist "%EXTRACT_DIR%" rd /s /q "%EXTRACT_DIR%"
 
-echo [!] Done.
+echo Done.
 pause
+
+exit /b 0
