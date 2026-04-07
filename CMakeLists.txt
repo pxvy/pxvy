@@ -18,6 +18,11 @@ if (CMAKE_C_COMPILER_ID MATCHES "GNU")
     set(COMPILE_OPTIONS -Ofast -funroll-loops -floop-nest-optimize
             -fstrict-overflow -fomit-frame-pointer
             -fipa-cp-clone)
+    target_link_options(${EXE_NAME} PRIVATE
+            "-static-libgcc"
+            "-static-libstdc++"
+            "-static"
+    )
 elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wno-deprecated-declarations)
     add_definitions(-DDO_FORCE_INLINE)
@@ -25,9 +30,8 @@ elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
             -fomit-frame-pointer -fvectorize -fslp-vectorize -fno-finite-math-only
             -fstrict-aliasing -finline-functions)
 elseif (MSVC)
-    message(FATAL_ERROR "MSVC is not supported. Please use MinGW, clang.")
-    # set(COMPILE_OPTIONS /O2 /W1 /GL /Ot /fp:fast /arch:AVX2 /GR- /std:c17)
-    # set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
+    set(COMPILE_OPTIONS /O2 /W1 /GL /Ot /fp:fast /arch:AVX2 /GR- /std:c17)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif ()
 
 

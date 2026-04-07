@@ -21,10 +21,12 @@
 #define ID_ABOUT               906
 #define ID_RECENT_CLEAR        980
 // Tools 서브메뉴
-#define ID_SCREENSHOT_CAPTURE    910
-#define ID_SCREENSHOT_FORMAT     911
-#define ID_SCREENSHOT_JPG        950
-#define ID_SCREENSHOT_PNG        951
+#define ID_SCREENSHOT_CAPTURE       910
+#define ID_SCREENSHOT_DIRECTORY     911
+#define ID_SCREENSHOT_FORMAT        912
+#define ID_SCREENSHOT_JPG           950
+#define ID_SCREENSHOT_PNG           951
+#define ID_SCREENSHOT_WEBP          952
 
 #define ID_RECENT_VIDEO_BASE  970   // 970 ~ 979
 
@@ -147,11 +149,13 @@ typedef struct {
 static MenuItemData g_screenshot_items[] = {
     {L"JPG", ID_SCREENSHOT_JPG, FALSE, NULL, 0},
     {L"PNG", ID_SCREENSHOT_PNG, FALSE, NULL, 0},
+    {L"WEBP", ID_SCREENSHOT_WEBP, FALSE, NULL, 0},
 };
 
 // ── 2단계: Screenshot 포맷 ──
 static MenuItemData g_capture_submenu[] = {
     {L"Capture Now\tCtrl+S", ID_SCREENSHOT_CAPTURE, FALSE, NULL, 0},
+    {L"Capture Directory", ID_SCREENSHOT_DIRECTORY, FALSE, NULL, 0},
     {NULL, 0, TRUE, NULL, 0},
     {L"Capture Format", ID_SCREENSHOT_FORMAT, FALSE, SUBMENU(g_screenshot_items)},
 };
@@ -650,12 +654,14 @@ static LRESULT CALLBACK MenuWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
                     UINT id = item->id;
 
                     // ── 선택 상태 갱신 ──────────────────────────────
-                    if (id == ID_SCREENSHOT_JPG || id == ID_SCREENSHOT_PNG) {
+                    if (id == ID_SCREENSHOT_JPG || id == ID_SCREENSHOT_PNG || id == ID_SCREENSHOT_WEBP) {
                         g_selected_screenshot_format = id;
                         if (id == ID_SCREENSHOT_JPG) {
                             pxvy_db_set_capture_type("JPG");
                         } else if (id == ID_SCREENSHOT_PNG) {
                             pxvy_db_set_capture_type("PNG");
+                        } else if (id == ID_SCREENSHOT_WEBP) {
+                            pxvy_db_set_capture_type("WEBP");
                         }
                     }
 

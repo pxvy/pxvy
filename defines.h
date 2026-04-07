@@ -34,7 +34,7 @@
 // ╚═════╝░╚═╝░░╚═╝░░░╚═╝░░░
 #ifdef _DEBUG
 
-SELECT_ANY void say(const char *format, ...) {
+static void say(const char *format, ...) {
     va_list args;
 
     va_start(args, format);

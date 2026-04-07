@@ -1,20 +1,3 @@
-// font_picker.h  –  PXVY 폰트 선택 다이얼로그 (v4)
-//
-// 변경점 (v4):
-//   - 한글 폰트명 렌더: wgl outline → GDI 텍스처 (한글 완전 지원)
-//   - 선택 확정 시 pxvy_set_subtitle_font() 자동 호출 (DB 저장)
-//   - 스크롤바 드래그 유지
-//
-// 한글 렌더 원리:
-//   TextOutA(FONT_SUBTITLE_FAMILY) → 32bpp DIB → R채널 = 알파
-//   → GL 텍스처 업로드 → glColor 로 색상 변조 (GL_MODULATE)
-//   → 지연 생성 (visible 항목만, 첫 렌더 시)
-//
-// 의존: main.c (os_theme, g_primary_color, glColor4f_255,
-//               OS_THEME_BK, OS_THEME_FG, OS_THEME_PC,
-//               FONT_SUBTITLE_FAMILY)
-//       database.h (pxvy_set_subtitle_font)
-//       stb_image.h, stb_image_resize2.h
 #pragma once
 #ifndef RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_FONT_PICKER_H
 #define RLAQHADMLGPEJWNDQHRQKDWLAOZMFH_FONT_PICKER_H
@@ -364,23 +347,26 @@ static void fp_quad_tex(GLuint tex, float x, float y, float w, float h) {
 }
 
 static GLuint fp_load_sym_tex(void) {
-    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_SYMBOL), RT_RCDATA);
-    HGLOBAL hGlob = hRes  ? LoadResource(NULL, hRes)   : NULL;
-    void   *pData = hGlob ? LockResource(hGlob)        : NULL;
-    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+    HRSRC hRes = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_SYMBOL), RT_RCDATA);
+    HGLOBAL hGlob = hRes ? LoadResource(NULL, hRes) : NULL;
+    void *pData = hGlob ? LockResource(hGlob) : NULL;
+    DWORD nSize = hRes ? SizeofResource(NULL, hRes) : 0;
 
     if (!pData || nSize == 0) return 0;
 
     int sw, sh, ch;
     unsigned char *src = stbi_load_from_memory(
-        (const stbi_uc *)pData, (int)nSize, &sw, &sh, &ch, 4);
+        (const stbi_uc *) pData, (int) nSize, &sw, &sh, &ch, 4);
     if (!src) return 0;
 
-    unsigned char *dst = (unsigned char *)malloc((size_t)FP_SYM_SZ * FP_SYM_SZ * 4);
-    if (!dst) { stbi_image_free(src); return 0; }
+    unsigned char *dst = (unsigned char *) malloc((size_t) FP_SYM_SZ * FP_SYM_SZ * 4);
+    if (!dst) {
+        stbi_image_free(src);
+        return 0;
+    }
 
     stbir_resize_uint8_linear(src, sw, sh, 0,
-                               dst, FP_SYM_SZ, FP_SYM_SZ, 0, STBIR_RGBA);
+                              dst, FP_SYM_SZ, FP_SYM_SZ, 0, STBIR_RGBA);
     stbi_image_free(src);
 
     GLuint t;
@@ -393,6 +379,51 @@ static GLuint fp_load_sym_tex(void) {
     glBindTexture(GL_TEXTURE_2D, 0);
     free(dst);
     return t;
+}
+
+// ── WinUI3 스타일 둥근 사각형 (채움) ──
+static void fp_rounded_rect_filled(float x, float y, float w, float h, float r) {
+    const int SEG = 8;
+    float ccx[4] = {x + r, x + w - r, x + w - r, x + r};
+    float ccy[4] = {y + r, y + r, y + h - r, y + h - r};
+    float sa[4] = {
+        (float) M_PI,
+        (float) (M_PI * 1.5),
+        0.0f,
+        (float) (M_PI * 0.5)
+    };
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(x + w * 0.5f, y + h * 0.5f);
+    for (int c = 0; c < 4; c++) {
+        for (int s = 0; s <= SEG; s++) {
+            float a = sa[c] + (float) s / SEG * (float) (M_PI * 0.5);
+            glVertex2f(ccx[c] + cosf(a) * r, ccy[c] + sinf(a) * r);
+        }
+    }
+    // 닫기 – 첫 모서리 첫 점으로 복귀
+    glVertex2f(ccx[0] + cosf(sa[0]) * r, ccy[0] + sinf(sa[0]) * r);
+    glEnd();
+}
+
+// ── WinUI3 스타일 둥근 사각형 (테두리) ──
+static void fp_rounded_rect_stroke(float x, float y, float w, float h, float r) {
+    const int SEG = 8;
+    float ccx[4] = {x + r, x + w - r, x + w - r, x + r};
+    float ccy[4] = {y + r, y + r, y + h - r, y + h - r};
+    float sa[4] = {
+        (float) M_PI,
+        (float) (M_PI * 1.5),
+        0.0f,
+        (float) (M_PI * 0.5)
+    };
+    glBegin(GL_LINE_LOOP);
+    for (int c = 0; c < 4; c++) {
+        for (int s = 0; s <= SEG; s++) {
+            float a = sa[c] + (float) s / SEG * (float) (M_PI * 0.5);
+            glVertex2f(ccx[c] + cosf(a) * r, ccy[c] + sinf(a) * r);
+        }
+    }
+    glEnd();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -593,18 +624,45 @@ static void fp_render_gl(FpCtx *ctx) {
         }
     }
 
-    // ── 10. OK 버튼 ──
+    // ── 10. OK 버튼 (WinUI3 AccentButton 스타일) ──
     {
-        const float BW = 72.0f, BH = 26.0f;
+        const float BW = 80.0f, BH = 30.0f, BR = 4.0f;
         float bx = W - (float) FP_LIST_X - BW;
         float by = LIST_BOT + ((float) FP_FOOTER_H - BH) * 0.5f;
-        glColor4f_255(OS_THEME_PC, ctx->ok_hover ? 1.0f : 0.80f);
-        fp_rect(bx, by, BW, BH);
+
+        glEnable(GL_LINE_SMOOTH);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+        // ── 배경: polygon smooth 끈 채로 채움 ──        ← 핵심 수정
+        glDisable(GL_POLYGON_SMOOTH);
+        glColor4f_255(OS_THEME_PC, 1.0f);
+        fp_rounded_rect_filled(bx, by, BW, BH, BR);
+
+        if (ctx->ok_hover) {
+            glColor4f(1.0f, 1.0f, 1.0f, 0.08f);
+            fp_rounded_rect_filled(bx, by, BW, BH, BR);
+        }
+
+        // ── 상단·측면 테두리 ──
+        glLineWidth(1.0f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.14f);
+        fp_rounded_rect_stroke(bx, by + 0.5f, BW, BH - 1.0f, BR);
+
+        // ── 하단 테두리 ──
+        glColor4f(0.0f, 0.0f, 0.0f, 0.20f);
+        glBegin(GL_LINES);
+        glVertex2f(bx + BR, by + BH - 0.5f);
+        glVertex2f(bx + BW - BR, by + BH - 0.5f);
+        glEnd();
+
+        // ── 텍스트: 여기서만 polygon smooth 켬 ──       ← 핵심 수정
         glEnable(GL_POLYGON_SMOOTH);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
         float tw = fp_str_w("OK", 0.82f);
-        glColor4f(1, 1, 1, 0.95f);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.95f);
         fp_str(bx + (BW - tw) * 0.5f, by + BH * 0.70f, "OK", 0.82f);
         glDisable(GL_POLYGON_SMOOTH);
+        glDisable(GL_LINE_SMOOTH);
     }
 
     glFlush();
@@ -1074,8 +1132,8 @@ static void show_font_picker(HWND owner, const char *current,
 
     // 선택 항목 초기 스크롤
     {
-        const float LH = (float)(FP_H - FP_FOOTER_H - FP_LIST_TOP_Y);
-        float iy = ctx->selected * (float)FP_ITEM_H;
+        const float LH = (float) (FP_H - FP_FOOTER_H - FP_LIST_TOP_Y);
+        float iy = ctx->selected * (float) FP_ITEM_H;
         if (iy + FP_ITEM_H > LH) ctx->scroll_y = iy + FP_ITEM_H - LH;
     }
 

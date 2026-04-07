@@ -128,6 +128,38 @@ static int pxvy_db_init(void) {
     return 0;
 }
 
+static bool pxvy_db_get_capture_directory(char *dir) {
+    sqlite3 *db;
+    if (sqlite3_open(g_db_path, &db) != SQLITE_OK) {
+        say("DB open failed: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, "SELECT Path FROM CapturePath WHERE id = 1;", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        say("DB CapturePath prepare failed: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return false;
+    }
+
+    bool success = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char *path = sqlite3_column_text(stmt, 0);
+        if (path) {
+            strncpy(dir, (const char *) path, MAX_PATH - 1);
+            dir[MAX_PATH - 1] = '\0';
+            success = true;
+        }
+    } else {
+        say("DB CapturePath row not found\n");
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return success;
+}
+
 static float pxvy_db_get_volume(void) {
     sqlite3 *db;
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) {
@@ -176,8 +208,10 @@ static bool pxvy_db_set_volume(float volume) {
 }
 
 static bool pxvy_db_set_capture_type(char *image_format) {
-    if (strcmp(image_format, "PNG") != 0 && strcmp(image_format, "JPG") != 0)
+    if (strcmp(image_format, "PNG") != 0 && strcmp(image_format, "JPG") != 0 && strcmp(image_format, "WEBP") != 0) {
         return false;
+    }
+
 
     sqlite3 *db;
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) {
@@ -219,6 +253,7 @@ static int pxvy_db_get_capture_type(void) {
             if (fmt) {
                 if (strcmp(fmt, "PNG") == 0) result = 1;
                 else if (strcmp(fmt, "JPG") == 0) result = 2;
+                else if (strcmp(fmt, "WEBP") == 0) result = 3;
             }
         }
         sqlite3_finalize(stmt);
@@ -464,8 +499,8 @@ static int pxvy_set_color(int r, int g, int b) {
     if (sqlite3_open(g_db_path, &db) != SQLITE_OK) return -1;
 
     const char *sql =
-            "INSERT INTO ColorTable(id, R, G, B) VALUES(1, ?, ?, ?) "  // ← 끝에 공백
-            "ON CONFLICT(id) DO UPDATE SET "                            // ← 끝에 공백
+            "INSERT INTO ColorTable(id, R, G, B) VALUES(1, ?, ?, ?) " // ← 끝에 공백
+            "ON CONFLICT(id) DO UPDATE SET " // ← 끝에 공백
             "  R = excluded.R,"
             "  G = excluded.G,"
             "  B = excluded.B;";
@@ -477,7 +512,8 @@ static int pxvy_set_color(int r, int g, int b) {
         sqlite3_bind_int(stmt, 2, g);
         sqlite3_bind_int(stmt, 3, b);
         rc = (sqlite3_step(stmt) == SQLITE_DONE) ? 0 : -1;
-        if (rc != 0) say("pxvy_set_color step failed: %s\n", sqlite3_errmsg(db));
+        if (rc != 0)
+            say("pxvy_set_color step failed: %s\n", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
     } else {
         say("pxvy_set_color prepare failed: %s\n", sqlite3_errmsg(db));

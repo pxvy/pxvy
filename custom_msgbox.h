@@ -291,21 +291,25 @@ static int mb_measure_text_w(const char *text, const char *font_name, int font_h
 }
 
 static GLuint mb_load_sym_tex(void) {
-    char exe[MAX_PATH], sym[MAX_PATH];
-    GetModuleFileNameA(NULL, exe, MAX_PATH);
-    char *sl = strrchr(exe, '\\');
-    if (sl) *(sl + 1) = '\0';
-    snprintf(sym, MAX_PATH, "%ssymbol.png", exe);
+    HRSRC   hRes  = FindResourceA(NULL, MAKEINTRESOURCEA(IDR_LOGO_SYMBOL), RT_RCDATA);
+    HGLOBAL hGlob = hRes  ? LoadResource(NULL, hRes)   : NULL;
+    void   *pData = hGlob ? LockResource(hGlob)        : NULL;
+    DWORD   nSize = hRes  ? SizeofResource(NULL, hRes) : 0;
+
+    if (!pData || nSize == 0) return 0;
+
     int sw, sh, ch;
-    unsigned char *src = stbi_load(sym, &sw, &sh, &ch, 4);
+    unsigned char *src = stbi_load_from_memory(
+        (const stbi_uc *)pData, (int)nSize, &sw, &sh, &ch, 4);
     if (!src) return 0;
-    unsigned char *dst = (unsigned char *) malloc((size_t) MB_SYM_SZ * MB_SYM_SZ * 4);
-    if (!dst) {
-        stbi_image_free(src);
-        return 0;
-    }
-    stbir_resize_uint8_linear(src, sw, sh, 0, dst, MB_SYM_SZ, MB_SYM_SZ, 0, STBIR_RGBA);
+
+    unsigned char *dst = (unsigned char *)malloc((size_t)MB_SYM_SZ * MB_SYM_SZ * 4);
+    if (!dst) { stbi_image_free(src); return 0; }
+
+    stbir_resize_uint8_linear(src, sw, sh, 0,
+                               dst, MB_SYM_SZ, MB_SYM_SZ, 0, STBIR_RGBA);
     stbi_image_free(src);
+
     GLuint t;
     glGenTextures(1, &t);
     glBindTexture(GL_TEXTURE_2D, t);

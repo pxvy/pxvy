@@ -38,6 +38,7 @@
 #include "colors.h"
 #include "compiler.h"
 #include "build_time.h"
+#include"smi2srt.h"
 #include <mmdeviceapi.h>
 #include <endpointvolume.h>
 
@@ -137,7 +138,9 @@ cleanup:
 
 
 mpv_render_param MPV_RENDER_PARAM_END() {
-    mpv_render_param param = {MPV_RENDER_PARAM_INVALID, 0};
+    mpv_render_param param;
+    param.type = MPV_RENDER_PARAM_INVALID;
+    param.data = 0;
     return param;
 }
 
@@ -236,7 +239,7 @@ static HBRUSH g_bg_brush = NULL;
 #define OS_THEME_FG os_theme.foreground.r,os_theme.foreground.g,os_theme.foreground.b
 #define OS_THEME_PC g_primary_color.r,g_primary_color.g,g_primary_color.b
 
-#define RGB_THEME_BK        RGB(os_theme.background.r,os_theme.background.g,os_theme.background.b)
+#define RGB_THEME_BG        RGB(os_theme.background.r,os_theme.background.g,os_theme.background.b)
 #define RGB_THEME_FG        RGB(os_theme.foreground.r,os_theme.foreground.g,os_theme.foreground.b)
 #define RGB_THEME_PRIMRY    RGB(g_primary_color.r, g_primary_color.g, g_primary_color.b);
 
@@ -405,7 +408,8 @@ static char g_info_tex_key[4096] = {0};
 // ──────────────────── 유틸리티 ────────────────────
 BOOL is_maximized_window(HWND hWnd, RECT rect) {
     HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = {sizeof(mi)};
+    MONITORINFO mi;
+    mi.cbSize = sizeof(mi);
     GetMonitorInfo(hMon, &mi);
     int workW = mi.rcWork.right - mi.rcWork.left;
     int workH = mi.rcWork.bottom - mi.rcWork.top;
@@ -430,7 +434,8 @@ static void toggle_fullscreen(HWND hWnd) {
         GetWindowRect(hWnd, &g_windowed_rect);
 
         HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO mi = {sizeof(mi)};
+        MONITORINFO mi;
+        mi.cbSize = sizeof(mi);
         GetMonitorInfo(hMon, &mi);
 
         SetWindowLong(hWnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
@@ -555,7 +560,7 @@ static void load_file(const char *path) {
     strncpy(g_file_path, path, MAX_PATH);
     // ── smi_to_srt.exe -s "절대경로" 실행 후 stdout에서 자막 경로 수신 ──
     char sub_path[MAX_PATH * 3] = {0};
-    {
+    do {
         // ① exe 디렉터리 (wide)
         wchar_t exe_dir_w[MAX_PATH];
         GetModuleFileNameW(NULL, exe_dir_w, MAX_PATH);
@@ -570,68 +575,100 @@ static void load_file(const char *path) {
         wchar_t smi_path_w[MAX_PATH * 3];
         wcsncpy(smi_path_w, path_w,_countof(smi_path_w));
         wchar_t *dot_w = wcsrchr(smi_path_w, L'.');
-        if (!dot_w) goto run_mpv;
+        if (!dot_w) {
+            break;
+        }
         wcsncpy(dot_w, L".smi",_countof(dot_w));
         if (GetFileAttributesW(smi_path_w) == INVALID_FILE_ATTRIBUTES)
-            goto run_mpv;
+            break;
 
-        // ③ 커맨드라인 조합 (wide)
-        wchar_t cmd_line_w[MAX_PATH * 6];
-        _snwprintf(cmd_line_w, MAX_PATH * 6,
-                   L"\"%ssmi_to_srt.exe\" -s \"%s\"", exe_dir_w, path_w);
+        // %TEMP%디렉토리에 smi_path_w의 basename + ".srt"로 srt_path_w를 만들어줘
 
-        // ④ stdout 파이프
-        HANDLE hRead = NULL, hWrite = NULL;
-        SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, TRUE};
-        if (!CreatePipe(&hRead, &hWrite, &sa, 0)) goto run_mpv;
-        SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+        // basename 추출 (마지막 \ 이후)
+        wchar_t* base_w = wcsrchr(smi_path_w, L'\\');
+        base_w = base_w ? base_w + 1 : smi_path_w;
 
-        STARTUPINFOW si = {0};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-        si.wShowWindow = SW_HIDE;
-        si.hStdOutput = hWrite;
-        si.hStdError = NULL;
-        si.hStdInput = NULL;
+        wchar_t base_srt_w[MAX_PATH] = {0};
+        wcscpy(base_srt_w, base_w);
+        wchar_t* dot2_w = wcsrchr(base_srt_w, L'.');
+        if (dot2_w) wcscpy(dot2_w, L".srt");
 
-        PROCESS_INFORMATION pi = {0};
-        if (CreateProcessW(NULL, cmd_line_w, NULL, NULL,
-                           TRUE, CREATE_NO_WINDOW,
-                           NULL, NULL, &si, &pi)) {
-            CloseHandle(hWrite);
-            hWrite = NULL;
+        // %TEMP% 경로 가져오기
+        wchar_t temp_dir_w[MAX_PATH]= {0};
+        GetTempPathW(MAX_PATH, temp_dir_w);
 
-            WaitForSingleObject(pi.hProcess, 5000);
+        // %TEMP%\basename.srt 조합
+        wchar_t srt_path_w[MAX_PATH * 2];
+        _snwprintf(srt_path_w, _countof(srt_path_w), L"%s%s", temp_dir_w, base_srt_w);
 
-            // ⑤ stdout 읽기
-            char buf[MAX_PATH * 3] = {0};
-            DWORD bytesRead = 0;
-            ReadFile(hRead, buf, sizeof(buf) - 1, &bytesRead, NULL);
 
-            if (bytesRead > 0) {
-                buf[bytesRead] = '\0';
+        wprintf(L"smi: %s\n", smi_path_w);
+        wprintf(L"srt: %s\n", srt_path_w);
+        smi_to_srt(smi_path_w, srt_path_w);
+        WideCharToMultiByte(CP_UTF8, 0, srt_path_w, -1, sub_path, sizeof(sub_path), NULL, NULL);
 
-                // 줄바꿈/공백 제거
-                char *end = buf + strlen(buf) - 1;
-                while (end >= buf &&
-                       (*end == '\r' || *end == '\n' || *end == ' '))
-                    *end-- = '\0';
+        //
+        // // ③ 커맨드라인 조합 (wide)
+        // wchar_t cmd_line_w[MAX_PATH * 6];
+        // _snwprintf(cmd_line_w, MAX_PATH * 6,
+        //            L"\"%ssmi_to_srt.exe\" -s \"%s\"", exe_dir_w, path_w);
+        //
+        // // ④ stdout 파이프
+        // HANDLE hRead = NULL, hWrite = NULL;
+        // SECURITY_ATTRIBUTES sa = {0};
+        // sa.nLength = sizeof(sa);
+        // sa.lpSecurityDescriptor = NULL;
+        // sa.bInheritHandle = TRUE;
+        // if (!CreatePipe(&hRead, &hWrite, &sa, 0)) {
+        //     break;
+        // };
+        // SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+        //
+        // STARTUPINFOW si = {0};
+        // si.cb = sizeof(si);
+        // si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        // si.wShowWindow = SW_HIDE;
+        // si.hStdOutput = hWrite;
+        // si.hStdError = NULL;
+        // si.hStdInput = NULL;
+        //
+        // PROCESS_INFORMATION pi = {0};
+        // if (CreateProcessW(NULL, cmd_line_w, NULL, NULL,
+        //                    TRUE, CREATE_NO_WINDOW,
+        //                    NULL, NULL, &si, &pi)) {
+        //     CloseHandle(hWrite);
+        //     hWrite = NULL;
+        //
+        //     WaitForSingleObject(pi.hProcess, 5000);
+        //
+        //     // ⑤ stdout 읽기
+        //     char buf[MAX_PATH * 3] = {0};
+        //     DWORD bytesRead = 0;
+        //     ReadFile(hRead, buf, sizeof(buf) - 1, &bytesRead, NULL);
+        //
+        //     if (bytesRead > 0) {
+        //         buf[bytesRead] = '\0';
+        //
+        //         // 줄바꿈/공백 제거
+        //         char *end = buf + strlen(buf) - 1;
+        //         while (end >= buf &&
+        //                (*end == '\r' || *end == '\n' || *end == ' '))
+        //             *end-- = '\0';
+        //
+        //         // ⑥ UTF-8 출력 그대로 사용
+        //         if (strlen(buf) > 0)
+        //             strncpy(sub_path, buf, sizeof(sub_path) - 1);
+        //     }
+        //
+        //     CloseHandle(pi.hProcess);
+        //     CloseHandle(pi.hThread);
+        // } else {
+        //     show_msgbox(NULL, "Error", "SMI2SRT Failed!",MB_OK,NULL,NULL);
+        //     if (hWrite) CloseHandle(hWrite);
+        // }
+        // CloseHandle(hRead);
+    } while (false);
 
-                // ⑥ UTF-8 출력 그대로 사용
-                if (strlen(buf) > 0)
-                    strncpy(sub_path, buf, sizeof(sub_path) - 1);
-            }
-
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-        } else {
-            show_msgbox(NULL, "Error", "SMI2SRT Failed!",MB_OK,NULL,NULL);
-            if (hWrite) CloseHandle(hWrite);
-        }
-        CloseHandle(hRead);
-    }
-
-run_mpv:
     g_pending_sub[0] = '\0';
     if (sub_path[0] != '\0') {
         strncpy(g_pending_sub, sub_path, sizeof(g_pending_sub) - 1);
@@ -721,6 +758,7 @@ static void capture_frame_to_dib(void) {
     char capture_format[8] = {0};
     if (capture_format_idx == 1) strncpy(capture_format, ".png", 5);
     else if (capture_format_idx == 2) strncpy(capture_format, ".jpg", 5);
+    else if (capture_format_idx == 3) strncpy(capture_format, ".webp", 6);
     else return;
 
     char capture_dir_path[MAX_PATH];
@@ -775,7 +813,7 @@ static BOOL init_opengl(HWND hWnd) {
     g_hDC = GetDC(hWnd);
     if (!g_hDC) return FALSE;
     PIXELFORMATDESCRIPTOR pfd = {0};
-    pfd.nSize = sizeof(pfd);
+    pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
     pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
     pfd.iPixelType = PFD_TYPE_RGBA;
@@ -963,7 +1001,11 @@ static void gl_info_rebuild_cache(
         MultiByteToWideChar(CP_UTF8, 0, lines[li], -1, wbuf, 2048);
         int iy = (int) cy;
         SetTextColor(hdc, RGB(255, 255, 255));
-        RECT r = {0, iy, img_w, img_h};
+        RECT r = {0};
+        r.left = 0;
+        r.top = iy;
+        r.right = img_w;
+        r.bottom = img_h;
         DrawTextW(hdc, wbuf, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_NOCLIP);
         cy += line_gap;
     }
@@ -1918,12 +1960,15 @@ static DWORD WINAPI render_thread_func(LPVOID param) {
             fbo.w = w;
             fbo.h = h;
             int flip_y = 1, block = 0;
-            mpv_render_param params[] = {
-                {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
-                {MPV_RENDER_PARAM_FLIP_Y, &flip_y},
-                {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block},
-                MPV_RENDER_PARAM_END()
-            };
+            mpv_render_param params[4];
+            params[0].type = MPV_RENDER_PARAM_OPENGL_FBO;
+            params[0].data = &fbo;
+            params[1].type = MPV_RENDER_PARAM_FLIP_Y;
+            params[1].data = &flip_y;
+            params[2].type = MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME;
+            params[2].data = &block;
+            params[3].type = MPV_RENDER_PARAM_INVALID;
+            params[3].data = NULL;
             mpv_render_context_render(mpv_gl, params);
         }
 
@@ -2228,11 +2273,13 @@ void SetCaptureFormat(void) {
 
     if (capture_format_idx == 1) strncpy(capture_format, ".png", 5);
     else if (capture_format_idx == 2) strncpy(capture_format, ".jpg", 5);
+    else if (capture_format_idx == 3) strncpy(capture_format, ".webp", 6);
     else return;
 
     // g_selected_screenshot_format 계산
     if (capture_format_idx == 1) g_selected_screenshot_format = ID_SCREENSHOT_PNG;
     else if (capture_format_idx == 2) g_selected_screenshot_format = ID_SCREENSHOT_JPG;
+    else if (capture_format_idx == 3)g_selected_screenshot_format = ID_SCREENSHOT_WEBP;
 }
 
 // ──────────────────── WndProc ────────────────────
@@ -2249,7 +2296,8 @@ void MaximizeWindow(HWND hWnd) {
         } else {
             GetWindowRect(hWnd, &g_restore_rect);
             HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi = {sizeof(mi)};
+            MONITORINFO mi = {0};
+            mi.cbSize = sizeof(mi);
             GetMonitorInfo(hMon, &mi);
             SetWindowPos(hWnd, NULL, mi.rcWork.left, mi.rcWork.top,
                          mi.rcWork.right, mi.rcWork.bottom, SWP_NOZORDER);
@@ -2268,7 +2316,8 @@ void MaximizeWindow(HWND hWnd) {
         GetWindowRect(hWnd, &g_restore_rect);
 
         HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO mi = {sizeof(mi)};
+        MONITORINFO mi = {0};
+        mi.cbSize = sizeof(mi);
         GetMonitorInfo(hMon, &mi);
         int workW = mi.rcWork.right - mi.rcWork.left;
         int workH = mi.rcWork.bottom - mi.rcWork.top;
@@ -2399,7 +2448,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int wW = cw + frameW, wH = newCH + frameH;
 
             HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi = {sizeof(mi)};
+            MONITORINFO mi = {0};
+            mi.cbSize = sizeof(mi);
             GetMonitorInfo(hMon, &mi);
             int workW = mi.rcWork.right - mi.rcWork.left;
             int workH = mi.rcWork.bottom - mi.rcWork.top;
@@ -2428,7 +2478,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_hide_element = FALSE;
 
             HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi = {sizeof(mi)};
+            MONITORINFO mi = {0};
+            mi.cbSize = sizeof(mi);
             GetMonitorInfo(hMon, &mi);
             int workW = mi.rcWork.right - mi.rcWork.left;
             int workH = mi.rcWork.bottom - mi.rcWork.top;
@@ -2540,7 +2591,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
         case WM_NCHITTEST: {
             if (g_fullscreen) return HTCLIENT;
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            POINT pt = {0};
+            pt.x = GET_X_LPARAM(lParam);
+            pt.y = GET_Y_LPARAM(lParam);
             ScreenToClient(hWnd, &pt);
             RECT rc;
             GetClientRect(hWnd, &rc);
@@ -2979,7 +3032,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
         case WM_RBUTTONUP: {
-            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            POINT pt = {0};
+            pt.x = GET_X_LPARAM(lParam);
+            pt.y = GET_Y_LPARAM(lParam);
             ClientToScreen(hWnd, &pt);
             show_context_menu(hWnd, pt.x, pt.y);
             return 0;
@@ -3048,6 +3103,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 };
                     break;
+                case ID_SCREENSHOT_DIRECTORY: {
+                    char dir[MAX_PATH] = {0};
+                    pxvy_db_get_capture_directory(dir);
+                    ShellExecuteA(NULL, "open", dir, NULL, NULL, SW_SHOWNORMAL);
+                    break;
+                }
                 case ID_SETTINGS: {
                     show_font_picker(hWnd,
                                      g_subtitle_font_family,
@@ -3199,7 +3260,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
     wc.hInstance = inst;
     wc.hIcon = LoadIcon(inst, MAKEINTRESOURCE(IDI_MAIN_ICON));
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR) IDC_ARROW);
-    g_bg_brush = CreateSolidBrush(RGB_THEME_BK);
+    g_bg_brush = CreateSolidBrush(RGB_THEME_BG);
     wc.hbrBackground = g_bg_brush;
     wc.lpszClassName = title;
     RegisterClassW(&wc);
@@ -3210,7 +3271,11 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
                            CW_USEDEFAULT, CW_USEDEFAULT, 960, 600,
                            NULL, NULL, inst, NULL);
 
-    MARGINS margins = {1, 1, 1, 1};
+    MARGINS margins = {0};
+    margins.cxLeftWidth = 1;
+    margins.cxRightWidth = 1;
+    margins.cyTopHeight = 1;
+    margins.cyBottomHeight = 1;
     DwmExtendFrameIntoClientArea(g_hWnd, &margins);
 
     COLORREF black = RGB(0, 0, 0);
@@ -3327,11 +3392,13 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
 
     mpv_opengl_init_params gl_init = {0};
     gl_init.get_proc_address = get_proc_address;
-    mpv_render_param rp[] = {
-        {MPV_RENDER_PARAM_API_TYPE, (void *) MPV_RENDER_API_TYPE_OPENGL},
-        {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init},
-        MPV_RENDER_PARAM_END()
-    };
+    mpv_render_param rp[3];
+    rp[0].type = MPV_RENDER_PARAM_API_TYPE;
+    rp[0].data = (void *) MPV_RENDER_API_TYPE_OPENGL;
+    rp[1].type = MPV_RENDER_PARAM_OPENGL_INIT_PARAMS;
+    rp[1].data = &gl_init;
+    rp[2].type = MPV_RENDER_PARAM_INVALID;
+    rp[2].data = NULL;
     if (mpv_render_context_create(&mpv_gl, mpv, rp) < 0) {
         MessageBoxA(NULL, "mpv_render_context_create() failed", "Error", MB_OK);
         return 1;
